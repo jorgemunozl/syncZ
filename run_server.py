@@ -1,10 +1,13 @@
-import cgi
 import io
 import http.server
 import hashlib
 import os
 import json
 import socketserver
+
+from email.parser import BytesParser
+from email.policy import default as email_default_policy
+import tempfile
 
 METADATA_PATH = 'file_list.json'
 path = "/home/jorge/zoteroReference"
@@ -29,44 +32,49 @@ class SyncHandler(http.server.SimpleHTTPRequestHandler):
     def do_POST(self):
         if self.path == '/upload':
             content_length = int(self.headers.get('Content-Length', 0))
+            content_type = self.headers.get('Content-Type', '')
+            if not content_type.startswith('multipart/form-data'):
+                self.send_error(400, "Content-Type must be multipart/form-data")
+                return
+            boundary = content_type.split("boundary=")[-1].encode()
             raw_body = self.rfile.read(content_length)
-            fp = io.BytesIO(raw_body)
-            environ = {
-                'REQUEST_METHOD': 'POST',
-                'CONTENT_TYPE': self.headers.get('Content-Type'),
-                'CONTENT_LENGTH': str(content_length),
-            }
-
-            form = cgi.FieldStorage(
-                fp=fp,
-                headers=self.headers,
-                environ=environ,
-                keep_blank_values=True
+            # Parse multipart using email.parser
+            msg = BytesParser(policy=email_default_policy).parsebytes(
+                b'Content-Type: ' + content_type.encode() + b'\r\n\r\n' + raw_body
             )
-
-            if 'file' not in form or not form['file'].filename:
+            fileitem = None
+            mtime = 0
+            relpath = None
+            for part in msg.iter_parts():
+                cd = part.get('Content-Disposition', '')
+                if 'form-data' in cd:
+                    params = {}
+                    for param in cd.split(';'):
+                        if '=' in param:
+                            k, v = param.strip().split('=', 1)
+                            params[k] = v.strip('"')
+                    if params.get('name') == 'file':
+                        fileitem = part
+                        filename = params.get('filename', 'uploaded_file')
+                    elif params.get('name') == 'mtime':
+                        mtime = float(part.get_content().strip())
+                    elif params.get('name') == 'relpath':
+                        relpath = part.get_content().strip()
+            if not fileitem:
                 self.send_error(400, "No file field")
                 return
-
-            fileitem = form['file']
-            mtime = float(form.getvalue('mtime', '0'))
-            # Accept relpath for recursive upload
-            relpath = form.getvalue('relpath')
             if relpath:
-                # Sanitize relpath to prevent directory traversal
                 relpath = os.path.normpath(relpath).replace('..', '')
                 filepath = os.path.join(path, relpath)
                 os.makedirs(os.path.dirname(filepath), exist_ok=True)
                 filename = relpath
             else:
-                filename = os.path.basename(fileitem.filename)
+                filename = filename if 'filename' in locals() else 'uploaded_file'
                 filepath = os.path.join(path, filename)
-
             with open(filepath, 'wb') as f:
-                f.write(fileitem.file.read())
+                f.write(fileitem.get_payload(decode=True))
             if mtime:
                 os.utime(filepath, (mtime, mtime))
-
             print(f"Saved uploaded file {filename}")
             self.send_response(200)
             self.end_headers()
