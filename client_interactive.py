@@ -22,7 +22,15 @@ def prompt_for_path(default_path):
     return path if path else default_path
 
 def prompt_for_ip(default_ip):
-    ip = input(f"Enter server IP address (press Enter for '{default_ip}'): ").strip()
+    print("\nNetwork Type:")
+    print("1. LAN (WiFi/Local Network)")
+    print("2. Ethernet (Wired, between two PCs)")
+    net_choice = input("Are you connecting over LAN or Ethernet? (1 for LAN, 2 for Ethernet) [1]: ").strip()
+    if net_choice == "2":
+        print("You selected Ethernet. Make sure both PCs are connected via cable and on the same network.")
+    else:
+        print("You selected LAN (WiFi/Local Network). Make sure both devices are on the same WiFi or LAN.")
+    ip = input(f"Enter server IP address (LAN or Ethernet, press Enter for '{default_ip}'): ").strip()
     return ip if ip else default_ip
 
 def prompt_for_port(default_port):
