@@ -11,13 +11,27 @@ import os
 def get_local_ip():
     """Get the local IP address of this machine."""
     try:
-        # Connect to a remote address to determine local IP
+        # Connect to a remote address to determine local IP (LAN)
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
             s.connect(("8.8.8.8", 80))
             local_ip = s.getsockname()[0]
         return local_ip
     except Exception:
         return "127.0.0.1"
+
+def get_ethernet_ip():
+    """Get the Ethernet IP address of this machine (if available)."""
+    try:
+        import fcntl, struct
+        iface = 'eth0'
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        return socket.inet_ntoa(fcntl.ioctl(
+            s.fileno(),
+            0x8915,  # SIOCGIFADDR
+            struct.pack('256s', iface[:15].encode('utf-8'))
+        )[20:24])
+    except Exception:
+        return get_local_ip()
 
 def update_client_config(server_ip, sync_path):
     """Update client.py with new configuration."""
@@ -78,24 +92,42 @@ def main():
     print("🔧 SyncZ Configuration Helper")
     print("=" * 40)
     
-    # Get local IP
-    local_ip = get_local_ip()
-    print(f"📡 Your local IP address: {local_ip}")
-    
-    # Configuration type
+    print("\n🌐 Network Type Selection:")
+    print("1. LAN (WiFi/Local Network)")
+    print("2. Ethernet (Wired)")
+    net_choice = input("Choose network type (1 for LAN, 2 for Ethernet) [1]: ").strip()
+    if net_choice == "2":
+        ip_method = get_ethernet_ip
+        net_label = "Ethernet"
+    else:
+        ip_method = get_local_ip
+        net_label = "LAN"
+    local_ip = ip_method()
+    print(f"📡 Detected {net_label} IP address: {local_ip}")
+
     print("\n🎯 What would you like to configure?")
     print("1. Server (this device will serve files)")
     print("2. Client (this device will sync from server)")
     print("3. Both")
-    
     choice = input("\nEnter your choice (1-3): ").strip()
-    
+
+    print("\n📁 Path Type Selection:")
+    print("1. Absolute path (recommended for most setups)")
+    print("2. Relative path (relative to this script)")
+    path_type = input("Choose path type (1 for absolute, 2 for relative) [1]: ").strip()
+    use_relative = (path_type == "2")
+
+    def get_path(prompt):
+        if use_relative:
+            rel = input(f"{prompt} (relative to this script, press Enter for '.'): ").strip()
+            return rel if rel else "."
+        else:
+            abs_path = input(f"{prompt} (absolute, press Enter for current directory): ").strip()
+            return abs_path if abs_path else os.getcwd()
+
     if choice in ["1", "3"]:
         print("\n🖥️  Server Configuration")
-        server_path = input(f"Enter sync directory path (press Enter for current directory): ").strip()
-        if not server_path:
-            server_path = os.getcwd()
-        
+        server_path = get_path("Enter sync directory path for server")
         port = input("Enter server port (press Enter for 8000): ").strip()
         if not port:
             port = 8000
@@ -105,11 +137,10 @@ def main():
             except ValueError:
                 print("Invalid port, using 8000")
                 port = 8000
-        
         if update_server_config(server_path, port):
             print(f"\n🚀 Server ready! Run: python run_server.py")
             print(f"📡 Server will be available at: http://{local_ip}:{port}")
-    
+
     if choice in ["2", "3"]:
         print("\n💻 Client Configuration")
         if choice == "3":
@@ -121,14 +152,10 @@ def main():
             if not server_ip:
                 print("❌ Server IP is required for client configuration")
                 return
-        
-        client_path = input("Enter local sync directory path (press Enter for current directory): ").strip()
-        if not client_path:
-            client_path = os.getcwd()
-        
+        client_path = get_path("Enter local sync directory path for client")
         if update_client_config(server_ip, client_path):
             print(f"\n🔄 Client ready! Run: python client.py")
-    
+
     print("\n✨ Configuration complete!")
     print("\n📝 Quick Start:")
     print("1. On server device: python run_server.py")

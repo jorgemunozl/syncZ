@@ -21,22 +21,35 @@ def generate_file_list(root_dir):
             })
     return rows
 
-#try with ip = 119
+# --- Configuration ---
+import sys
 
-path="/root/shared/zoteroReference"
+CONFIG_FILE = "config.json"
+DEFAULT_PATH = "/root/shared/zoteroReference"
+DEFAULT_SERVER_IP = "192.168.43.119"
+DEFAULT_SERVER_PORT = 8000
+
+def load_config():
+    if os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    # Default config if not present
+    return {
+        "path": DEFAULT_PATH,
+        "server_ip": DEFAULT_SERVER_IP,
+        "server_port": DEFAULT_SERVER_PORT
+    }
+
+config = load_config()
+path = config.get("path", DEFAULT_PATH)
+SERVER_IP = config.get("server_ip", DEFAULT_SERVER_IP)
+SERVER_PORT = config.get("server_port", DEFAULT_SERVER_PORT)
+BASE_URL = f"http://{SERVER_IP}:{SERVER_PORT}"
+METADATA_URL = f"{BASE_URL}/metadata"
+LOCAL_JSON = "file_list.json"
+DOWNLOAD_DIR = "."
 
 os.chdir(path)
-
-# IP = input("Enter the ip: ")
-
-
-SERVER_IP   = "192.168.43.119"   # your laptop’s reserved DHCP/static IP
-SERVER_PORT = 8000
-BASE_URL    = f"http://{SERVER_IP}:{SERVER_PORT}"
-
-METADATA_URL = f"{BASE_URL}/metadata"
-LOCAL_JSON   = "file_list.json"
-DOWNLOAD_DIR = "."
 
 def sha256sum(path):
     h = hashlib.sha256()
