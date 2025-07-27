@@ -35,6 +35,17 @@ read -p "Run as (1/2/q): " mode
 
 if [ "$mode" = "1" ]; then
   echo "\nYou chose CLIENT."
+  # Show current sync path
+  if [ -f "$CONFIG_FILE" ]; then
+    current_path=$(python3 -c "import json; print(json.load(open('$CONFIG_FILE'))['path'])")
+    echo "Current sync path: $current_path"
+  fi
+  # Activate venv if exists
+  if [ -f ".env/bin/activate" ]; then
+    echo "Activating Python virtual environment (.env)..."
+    # shellcheck disable=SC1091
+    source .env/bin/activate
+  fi
   read -p "Do you want to change the sync path? (y/N): " change_path
   if [[ "$change_path" =~ ^[Yy]$ ]]; then
     ask_path
@@ -44,6 +55,11 @@ if [ "$mode" = "1" ]; then
   fi
 elif [ "$mode" = "2" ]; then
   echo "\nYou chose SERVER."
+  # Show current sync path
+  if [ -f "$CONFIG_FILE" ]; then
+    current_path=$(python3 -c "import json; print(json.load(open('$CONFIG_FILE'))['path'])")
+    echo "Current sync path: $current_path"
+  fi
   read -p "Do you want to change the sync path? (y/N): " change_path
   if [[ "$change_path" =~ ^[Yy]$ ]]; then
     ask_path
