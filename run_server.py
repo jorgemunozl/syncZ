@@ -5,12 +5,29 @@ import os
 import json
 import socketserver
 
+
 from email.parser import BytesParser
 from email.policy import default as email_default_policy
-import tempfile
 
+
+# --- Configuration ---
+CONFIG_FILE = "config.json"
+DEFAULT_PATH = "/home/jorge/zoteroReference"
+DEFAULT_PORT = 8000
+
+def load_config():
+    if os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {
+        "path": DEFAULT_PATH,
+        "port": DEFAULT_PORT
+    }
+
+config = load_config()
+path = config.get("path", DEFAULT_PATH)
+PORT = config.get("port", DEFAULT_PORT)
 METADATA_PATH = 'file_list.json'
-path = "/home/jorge/zoteroReference"
 os.chdir(path)
 
 class SyncHandler(http.server.SimpleHTTPRequestHandler):
