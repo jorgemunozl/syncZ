@@ -127,12 +127,35 @@ termux-setup-storage
 # ~/storage/external-1 (SD card, if available)
 ```
 
+
+## Zotero Integrations (Planned)
+
+In the future, SyncZ will offer deeper integration with [Zotero](https://www.zotero.org/), the open-source reference manager. Planned features include:
+
+- Automatic sync of Zotero libraries and attachments
+- Support for syncing `.betterbibtex` export files for citation management
+- Integration with Zotero plugins and custom metadata
+- Smart conflict resolution for reference files
+
+### Example Zotero Sync Scenarios
+
+- **Syncing Better BibTeX exports:**
+  - Keep your `MyLibrary.bib` or `.betterbibtex` files up to date across devices
+  - Example: `~/Zotero/BetterBibTeX/MyLibrary.bib`
+- **Full Zotero data folder sync:**
+  - Example: `~/Zotero` (syncs all attachments, notes, and metadata)
+- **Selective group library sync:**
+  - Example: `~/Zotero/groups/1234567`
+
+Stay tuned for more Zotero-focused features and workflow enhancements!
+
 ## Example Use Cases
 
 1. **Zotero Reference Sync**: Keep research papers and references synchronized between desktop and mobile
-2. **Document Backup**: Ensure important documents are backed up across devices
-3. **Development Files**: Sync code projects between development environments
-4. **Media Files**: Keep photos, music, or videos synchronized
+2. **Sync Better BibTeX files**: Keep `.betterbibtex` or `.bib` files in sync for LaTeX workflows
+3. **Document Backup**: Ensure important documents are backed up across devices
+4. **Development Files**: Sync code projects between development environments
+5. **Media Files**: Keep photos, music, or videos synchronized
 
 ## Troubleshooting
 

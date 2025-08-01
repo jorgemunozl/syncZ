@@ -1,3 +1,17 @@
+# Function to install requirements
+function install_requirements() {
+  if [ -f "requirements.txt" ]; then
+    echo "Checking/installing Python requirements..."
+    if [ -f ".env/bin/activate" ]; then
+      source .env/bin/activate
+      pip install --upgrade pip
+      pip install -r requirements.txt
+    else
+      pip3 install --user --upgrade pip
+      pip3 install --user -r requirements.txt
+    fi
+  fi
+}
 #!/bin/bash
 
 # SyncZ Setup Script
@@ -46,6 +60,7 @@ if [ "$mode" = "1" ]; then
     # shellcheck disable=SC1091
     source .env/bin/activate
   fi
+  install_requirements
   read -p "Do you want to change the sync path? (y/N): " change_path
   if [[ "$change_path" =~ ^[Yy]$ ]]; then
     ask_path
@@ -60,6 +75,7 @@ elif [ "$mode" = "2" ]; then
     current_path=$(python3 -c "import json; print(json.load(open('$CONFIG_FILE'))['path'])")
     echo "Current sync path: $current_path"
   fi
+  install_requirements
   read -p "Do you want to change the sync path? (y/N): " change_path
   if [[ "$change_path" =~ ^[Yy]$ ]]; then
     ask_path
