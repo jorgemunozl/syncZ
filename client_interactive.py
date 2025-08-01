@@ -105,10 +105,16 @@ def main():
     local_json = 'file_list.json'
     download_dir = '.'
 
+
     print(ctext('Fetching remote metadata...', Fore.BLUE))
-    resp = requests.get(metadata_url)
-    resp.raise_for_status()
-    remote_meta = resp.json()
+    try:
+        resp = requests.get(metadata_url, timeout=5)
+        resp.raise_for_status()
+        remote_meta = resp.json()
+    except requests.exceptions.RequestException as e:
+        print(ctext(f"\nCould not connect to server at {config['server_ip']}:{config['server_port']}.", Fore.RED))
+        print(ctext(f"Error: {e}\nAborting sync.", Fore.RED))
+        return
 
     local_meta = generate_file_list(config['path'])
     with open(local_json, 'w', encoding='utf-8') as f:

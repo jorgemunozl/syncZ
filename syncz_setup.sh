@@ -1,9 +1,20 @@
-# Offer to add a syncz alias to ~/.bashrc
+# Offer to add a syncz alias to ~/.bashrc, with robust yes/no prompt
 SCRIPT_PATH="$(realpath "$0")"
+function ask_yes_no() {
+  local prompt="$1"
+  local answer
+  while true; do
+    read -p "$prompt" answer
+    case "$answer" in
+      [Yy]|[Yy][Ee][Ss]) return 0 ;;
+      [Nn]|[Nn][Oo]|"") return 1 ;;
+      *) echo "Please answer y or n." ;;
+    esac
+  done
+}
 if ! grep -q "alias syncz=" ~/.bashrc 2>/dev/null; then
   echo
-  read -p "Do you want to add a 'syncz' command to your shell (in ~/.bashrc)? (y/N): " add_alias
-  if [[ "$add_alias" =~ ^[Yy]$ ]]; then
+  if ask_yes_no "Do you want to add a 'syncz' command to your shell (in ~/.bashrc)? (y/N): "; then
     echo "alias syncz='bash $SCRIPT_PATH'" >> ~/.bashrc
     echo "Alias 'syncz' added. Run 'source ~/.bashrc' or open a new terminal to use it."
   fi
@@ -72,8 +83,7 @@ if [ "$mode" = "1" ]; then
     current_ip=$(python3 -c "import json; print(json.load(open('$CONFIG_FILE')).get('server_ip', ''))")
     echo "Current sync path: $current_path"
     echo "Current server IP: $current_ip"
-    read -p "Do you want to change the server IP? (y/N): " change_ip
-    if [[ "$change_ip" =~ ^[Yy]$ ]]; then
+    if ask_yes_no "Do you want to change the server IP? (y/N): "; then
       ask_ip
     fi
   fi
@@ -84,8 +94,7 @@ if [ "$mode" = "1" ]; then
     source .env/bin/activate
   fi
   install_requirements
-  read -p "Do you want to change the sync path? (y/N): " change_path
-  if [[ "$change_path" =~ ^[Yy]$ ]]; then
+  if ask_yes_no "Do you want to change the sync path? (y/N): "; then
     ask_path
     python3 client_interactive.py
   else
@@ -99,17 +108,14 @@ elif [ "$mode" = "2" ]; then
     current_ip=$(python3 -c "import json; print(json.load(open('$CONFIG_FILE')).get('server_ip', ''))")
     echo "Current sync path: $current_path"
     echo "Current server IP: $current_ip"
-    read -p "Do you want to change the server IP? (y/N): " change_ip
-    if [[ "$change_ip" =~ ^[Yy]$ ]]; then
+    if ask_yes_no "Do you want to change the server IP? (y/N): "; then
       ask_ip
     fi
   fi
   install_requirements
-  read -p "Do you want to change the sync path? (y/N): " change_path
-  if [[ "$change_path" =~ ^[Yy]$ ]]; then
+  if ask_yes_no "Do you want to change the sync path? (y/N): "; then
     ask_path
-    read -p "Do you want to change the server port? (y/N): " change_port
-    if [[ "$change_port" =~ ^[Yy]$ ]]; then
+    if ask_yes_no "Do you want to change the server port? (y/N): "; then
       ask_port
     fi
     python3 run_server_interactive.py
