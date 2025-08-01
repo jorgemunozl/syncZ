@@ -127,6 +127,7 @@ file_list.json
 *.tmp
 .DS_Store
 Thumbs.db
+.crush/
 
 # IDE files
 .vscode/

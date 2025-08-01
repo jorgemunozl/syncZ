@@ -1,0 +1,36 @@
+#!/usr/bin/env python3
+import sys
+import os
+
+# Support: syncz -c   => python client.py
+#         syncz -s   => python run_server.py
+#         syncz -ci  => python client_interactive.py
+#         syncz -si  => python run_server_interactive.py
+#         (or print usage)
+
+SCRIPT_ROOT = os.path.dirname(os.path.abspath(__file__))
+
+flag_map = {
+    '-c': 'client.py',
+    '-s': 'run_server.py',
+    '-ci': 'client_interactive.py',
+    '-si': 'run_server_interactive.py',
+}
+
+usage = f"""
+Usage:
+    syncz -c          # run syncz client
+    syncz -s          # run syncz server
+    syncz -ci         # run interactive client
+    syncz -si         # run interactive server
+"""
+
+def main():
+    if len(sys.argv) != 2 or sys.argv[1] not in flag_map:
+        print(usage)
+        sys.exit(1)
+    script = os.path.join(SCRIPT_ROOT, flag_map[sys.argv[1]])
+    os.execv(sys.executable, [sys.executable, script])
+
+if __name__ == "__main__":
+    main()
