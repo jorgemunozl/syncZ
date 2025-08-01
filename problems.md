@@ -1,0 +1,1 @@
+The time stamps work also when just read it? That is an error

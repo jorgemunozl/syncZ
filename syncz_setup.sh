@@ -1,3 +1,20 @@
+# Offer to add a syncz alias to ~/.bashrc
+SCRIPT_PATH="$(realpath "$0")"
+if ! grep -q "alias syncz=" ~/.bashrc 2>/dev/null; then
+  echo
+  read -p "Do you want to add a 'syncz' command to your shell (in ~/.bashrc)? (y/N): " add_alias
+  if [[ "$add_alias" =~ ^[Yy]$ ]]; then
+    echo "alias syncz='bash $SCRIPT_PATH'" >> ~/.bashrc
+    echo "Alias 'syncz' added. Run 'source ~/.bashrc' or open a new terminal to use it."
+  fi
+fi
+function ask_ip() {
+  read -p "Enter server IP (leave blank to keep current): " new_ip
+  if [ ! -z "$new_ip" ]; then
+    python3 -c "import json; c=json.load(open('$CONFIG_FILE')); c['server_ip']='$new_ip'; json.dump(c, open('$CONFIG_FILE','w'), indent=2)"
+    echo "Server IP updated to $new_ip"
+  fi
+}
 # Function to install requirements
 function install_requirements() {
   if [ -f "requirements.txt" ]; then
@@ -49,10 +66,16 @@ read -p "Run as (1/2/q): " mode
 
 if [ "$mode" = "1" ]; then
   echo "\nYou chose CLIENT."
-  # Show current sync path
+  # Show current sync path and server IP
   if [ -f "$CONFIG_FILE" ]; then
     current_path=$(python3 -c "import json; print(json.load(open('$CONFIG_FILE'))['path'])")
+    current_ip=$(python3 -c "import json; print(json.load(open('$CONFIG_FILE')).get('server_ip', ''))")
     echo "Current sync path: $current_path"
+    echo "Current server IP: $current_ip"
+    read -p "Do you want to change the server IP? (y/N): " change_ip
+    if [[ "$change_ip" =~ ^[Yy]$ ]]; then
+      ask_ip
+    fi
   fi
   # Activate venv if exists
   if [ -f ".env/bin/activate" ]; then
@@ -70,10 +93,16 @@ if [ "$mode" = "1" ]; then
   fi
 elif [ "$mode" = "2" ]; then
   echo "\nYou chose SERVER."
-  # Show current sync path
+  # Show current sync path and server IP
   if [ -f "$CONFIG_FILE" ]; then
     current_path=$(python3 -c "import json; print(json.load(open('$CONFIG_FILE'))['path'])")
+    current_ip=$(python3 -c "import json; print(json.load(open('$CONFIG_FILE')).get('server_ip', ''))")
     echo "Current sync path: $current_path"
+    echo "Current server IP: $current_ip"
+    read -p "Do you want to change the server IP? (y/N): " change_ip
+    if [[ "$change_ip" =~ ^[Yy]$ ]]; then
+      ask_ip
+    fi
   fi
   install_requirements
   read -p "Do you want to change the sync path? (y/N): " change_path
