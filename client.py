@@ -118,10 +118,11 @@ def main_menu():
     show_current_config()
     while True:
         print(ctext("\n" + "╔" + "=" * 48 + "╗", Fore.CYAN))
-        print(ctext("║" + " " * 12 + "SyncZ Client Main Menu" + " " * 13 + "║", Fore.GREEN))
+        print(ctext("║" + " " * 16 + "SyncZ Main Menu" + " " * 17 + "║", Fore.GREEN))
         print(ctext("╠" + "=" * 48 + "╣", Fore.CYAN))
-        print(ctext("║  ", Fore.CYAN) + ctext("1)", Fore.YELLOW) + ctext(" 🚀 Sync now" + " " * 33 + "║", Fore.WHITE))
-        print(ctext("║  ", Fore.CYAN) + ctext("2)", Fore.YELLOW) + ctext(" ⚙️  Change config (path/ip/port)" + " " * 15 + "║", Fore.WHITE))
+        print(ctext("║  ", Fore.CYAN) + ctext("1)", Fore.YELLOW) + ctext(" 🚀 Sync now (Client mode)" + " " * 21 + "║", Fore.WHITE))
+        print(ctext("║  ", Fore.CYAN) + ctext("2)", Fore.YELLOW) + ctext(" 🖥️  Start Server" + " " * 30 + "║", Fore.WHITE))
+        print(ctext("║  ", Fore.CYAN) + ctext("3)", Fore.YELLOW) + ctext(" ⚙️  Change config (path/ip/port)" + " " * 15 + "║", Fore.WHITE))
         print(ctext("║  ", Fore.CYAN) + ctext("q)", Fore.YELLOW) + ctext(" 🚪 Quit" + " " * 38 + "║", Fore.WHITE))
         print(ctext("╚" + "=" * 48 + "╝", Fore.CYAN))
         
@@ -129,6 +130,8 @@ def main_menu():
         if choice == "1":
             do_sync()
         elif choice == "2":
+            start_server()
+        elif choice == "3":
             change_config()
             show_current_config()  # Show updated config after changes
         elif choice == "q":
@@ -157,6 +160,19 @@ def change_config():
     with open(CONFIG_FILE, "w", encoding="utf-8") as f:
         json.dump(config, f, indent=2)
     print("Config updated.")
+
+
+def start_server():
+    import subprocess
+    print(ctext("\n🖥️  Starting SyncZ Server...", Fore.GREEN))
+    try:
+        subprocess.run(["python3", "run_server.py"], check=True)
+    except subprocess.CalledProcessError:
+        print(ctext("❌ Failed to start server. Make sure run_server.py exists.",
+                    Fore.RED))
+    except KeyboardInterrupt:
+        print(ctext("\n🛑 Server stopped by user.", Fore.YELLOW))
+
 
 def do_sync():
     config = load_config()

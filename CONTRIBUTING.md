@@ -5,7 +5,7 @@ Thank you for your interest in contributing to SyncZ! This document provides gui
 ## Getting Started
 
 1. Fork the repository
-2. Clone your fork: `git clone https://github.com/yourusername/syncZ.git`
+2. Clone your fork: `git clone https://github.com/jorgemunozl/syncZ.git`
 3. Create a feature branch: `git checkout -b feature-name`
 4. Make your changes
 5. Test your changes
@@ -21,8 +21,8 @@ Thank you for your interest in contributing to SyncZ! This document provides gui
 ### Setup
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/syncZ.git
-cd syncZ
+git clone https://github.com/jorgemunozl/syncFilesDevicesLocal.git
+cd syncFilesDevicesLocal
 
 # Install dependencies
 pip install -r requirements.txt

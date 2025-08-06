@@ -66,14 +66,14 @@ Termux is a powerful terminal emulator for Android that provides a Linux environ
 
 ### Server Configuration (`run_server.py`)
 
-- `path`: Directory to serve and sync (default: `/home/jorge/zoteroReference`)
+- `path`: Directory to serve and sync (default: `/home/user/zoteroReference`)
 - `PORT`: HTTP server port (default: 8000)
 
 ### Client Configuration (`client.py`)
 
 - `SERVER_IP`: IP address of the server device
 - `SERVER_PORT`: Server port (should match server configuration)
-- `path`: Local directory to sync (default: `/root/shared/zoteroReference`)
+- `path`: Local directory to sync (default: `/home/user/zoteroReference`)
 
 ## Network Setup
 
@@ -109,7 +109,7 @@ pkg install python git
 pip install requests
 
 # Clone or download SyncZ
-git clone <your-repo-url>
+git clone git@github.com:jorgemunozl/syncFilesDevicesLocal.git
 cd syncZ
 
 # Edit configuration

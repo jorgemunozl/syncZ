@@ -17,7 +17,7 @@ flag_map = {
     '-si': 'run_server_interactive.py',
 }
 
-usage = f"""
+usage = """
 Usage:
     syncz -c          # run syncz client
     syncz -s          # run syncz server
