@@ -52,6 +52,13 @@ function setup_virtual_env() {
     echo "Activating Python virtual environment (.env)..."
     source .env/bin/activate
   fi
+  
+  # Check if required packages are installed
+  if ! python3 -c "import requests, colorama" 2>/dev/null; then
+    echo "Installing required packages..."
+    pip install requests colorama
+  fi
+  
   return 0
 }
 

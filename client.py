@@ -14,6 +14,20 @@ try:
     colorama_init()
     COLOR_ENABLED = True
 except ImportError:
+    # Fallback for when colorama is not available
+    class Fore:
+        RED = ""
+        GREEN = ""
+        YELLOW = ""
+        BLUE = ""
+        MAGENTA = ""
+        CYAN = ""
+        WHITE = ""
+        RESET = ""
+    
+    class Style:
+        RESET_ALL = ""
+    
     COLOR_ENABLED = False
 
 def ctext(text, color=None):
