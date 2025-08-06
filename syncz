@@ -1,36 +1,61 @@
 #!/usr/bin/env python3
 import sys
 import os
+import subprocess
 
-# Support: syncz -c   => python client.py
-#         syncz -s   => python run_server.py
-#         syncz -ci  => python client_interactive.py
-#         syncz -si  => python run_server_interactive.py
-#         (or print usage)
+# Support: syncz -c   => python client.py (unified menu)
+#         syncz -s   => python run_server.py (with beautiful interface)
+#         syncz      => python client.py (default to unified menu)
+#         (or print usage for invalid flags)
 
 SCRIPT_ROOT = os.path.dirname(os.path.abspath(__file__))
 
-flag_map = {
-    '-c': 'client.py',
-    '-s': 'run_server.py',
-    '-ci': 'client_interactive.py',
-    '-si': 'run_server_interactive.py',
-}
+def setup_environment():
+    """Setup virtual environment and dependencies if needed"""
+    env_path = os.path.join(SCRIPT_ROOT, '.env')
+    if os.path.exists(os.path.join(env_path, 'bin', 'activate')):
+        # Activate virtual environment
+        activate_script = os.path.join(env_path, 'bin', 'activate')
+        # Set environment variables that would be set by sourcing activate
+        os.environ['VIRTUAL_ENV'] = env_path
+        os.environ['PATH'] = os.path.join(env_path, 'bin') + ':' + os.environ.get('PATH', '')
+        # Use the virtual environment's python
+        return os.path.join(env_path, 'bin', 'python')
+    return sys.executable
 
 usage = """
 Usage:
-    syncz -c          # run syncz client
-    syncz -s          # run syncz server
-    syncz -ci         # run interactive client
-    syncz -si         # run interactive server
+    syncz          # run unified SyncZ interface (default)
+    syncz -c       # run unified SyncZ interface (client menu)
+    syncz -s       # run SyncZ server (beautiful interface)
 """
 
 def main():
-    if len(sys.argv) != 2 or sys.argv[1] not in flag_map:
+    python_exe = setup_environment()
+    
+    # Handle different argument patterns
+    if len(sys.argv) == 1:
+        # No arguments: default to unified interface
+        script = os.path.join(SCRIPT_ROOT, 'client.py')
+        os.execv(python_exe, [python_exe, script])
+        
+    elif len(sys.argv) == 2:
+        flag = sys.argv[1]
+        if flag == '-c':
+            # Client: use unified interface
+            script = os.path.join(SCRIPT_ROOT, 'client.py')
+            os.execv(python_exe, [python_exe, script])
+        elif flag == '-s':
+            # Server: use beautiful server interface
+            script = os.path.join(SCRIPT_ROOT, 'run_server.py')
+            os.execv(python_exe, [python_exe, script])
+        else:
+            print(usage)
+            sys.exit(1)
+    else:
         print(usage)
         sys.exit(1)
-    script = os.path.join(SCRIPT_ROOT, flag_map[sys.argv[1]])
-    os.execv(sys.executable, [sys.executable, script])
+
 
 if __name__ == "__main__":
     main()

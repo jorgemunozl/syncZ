@@ -1,190 +1,273 @@
-# SyncZ - Cross-Device File Synchronization
+# 🚀 SyncZ - Beautiful Cross-Device File Synchronization
 
-SyncZ is a lightweight file synchronization tool designed to keep files synchronized between two devices over a local network. It's particularly useful for synchronizing files between a desktop/laptop and mobile devices using Termux.
+SyncZ is a modern, user-friendly file synchronization tool designed to keep files synchronized between multiple devices over a local network. With its beautiful colored interface and intelligent features, it's perfect for syncing files between desktop, laptop, and mobile devices using Termux.
 
-## Features
+## ✨ Key Features
 
-- **Bidirectional sync**: Automatically detects and syncs newer files in both directions
-- **Efficient transfer**: Only transfers files that have changed (based on modification time and SHA256 hash)
-- **Mobile-friendly**: Works seamlessly with Termux on Android devices
-- **Simple HTTP protocol**: Uses standard HTTP for file transfer
-- **Automatic cleanup**: Removes files that have been deleted on the remote device
+- 🎨 **Beautiful Interface**: Colorful, emoji-rich console interface with professional menus
+- 🔄 **Bidirectional Sync**: Automatically detects and syncs newer files in both directions
+- 🧠 **Smart Transfer**: Only transfers files that have changed (based on modification time and SHA256 hash)
+- 📱 **Mobile-Friendly**: Works seamlessly with Termux on Android devices
+- 🛡️ **Safety Features**: PDF deletion confirmation and recycle bin system (10-day auto-cleanup)
+- ⚙️ **Easy Configuration**: Interactive configuration management with beautiful displays
+- 🌐 **Unified Interface**: Single entry point with multiple operation modes
+- 🖥️ **Server Detection**: Graceful handling of server connectivity issues
 
-## How It Works
+## 🎮 How to Use SyncZ
 
-The system consists of two main components:
+### 🚀 Quick Start
 
-1. **Server** (`run_server.py`): Runs on one device to serve files and metadata
-2. **Client** (`client.py`): Runs on another device to sync with the server
-
-The synchronization process:
-1. Server generates metadata (file list with hashes and modification times)
-2. Client fetches remote metadata and compares with local files
-3. Files are downloaded, uploaded, or deleted as needed to achieve synchronization
-4. Both devices end up with identical file sets
-
-## Requirements
-
-- Python 3.6+
-- `requests` library
-- Network connectivity between devices
-
-### For Mobile Devices (Termux)
-
-Termux is a powerful terminal emulator for Android that provides a Linux environment. To use SyncZ on Android:
-
-1. Install [Termux](https://termux.com/) from F-Droid or GitHub
-2. Install Python and required packages:
-   ```bash
-   pkg update
-   pkg install python
-   pip install requests
-   ```
-
-## Setup
-
-### Server Setup (Device 1)
-
-1. Edit the `path` variable in `run_server.py` to point to your desired sync directory
-2. Run the server:
-   ```bash
-   python run_server.py
-   ```
-3. The server will start on port 8000 and display the serving address
-
-### Client Setup (Device 2)
-
-1. Edit the following variables in `client.py`:
-   - `SERVER_IP`: IP address of the server device
-   - `path`: Local directory to sync
-2. Run the client:
-   ```bash
-   python client.py
-   ```
-
-## Configuration
-
-### Server Configuration (`run_server.py`)
-
-- `path`: Directory to serve and sync (default: `/home/user/zoteroReference`)
-- `PORT`: HTTP server port (default: 8000)
-
-### Client Configuration (`client.py`)
-
-- `SERVER_IP`: IP address of the server device
-- `SERVER_PORT`: Server port (should match server configuration)
-- `path`: Local directory to sync (default: `/home/user/zoteroReference`)
-
-## Network Setup
-
-1. **Find your server IP**: 
-   ```bash
-   ip addr show
-   # or
-   hostname -I
-   ```
-
-2. **Ensure devices are on the same network**: Both devices should be connected to the same WiFi network
-
-3. **Configure firewall** (if necessary): Allow incoming connections on port 8000
-
-## Mobile Usage with Termux
-
-Termux provides a full Linux environment on Android, making it perfect for running SyncZ:
-
-### Installing Termux
-- **Recommended**: Download from [F-Droid](https://f-droid.org/packages/com.termux/)
-- Alternative: Download from [GitHub Releases](https://github.com/termux/termux-app/releases)
-- **Note**: Avoid Google Play Store version as it's outdated
-
-### Termux Setup for SyncZ
 ```bash
-# Update packages
-pkg update && pkg upgrade
-
-# Install Python and dependencies
-pkg install python git
-
-# Install required Python packages
-pip install requests
-
-# Clone or download SyncZ
-git clone git@github.com:jorgemunozl/syncFilesDevicesLocal.git
+# Clone the repository
+git clone https://github.com/jorgemunozl/syncFilesDevicesLocal.git
 cd syncZ
 
-# Edit configuration
-nano client.py  # or use vim/emacs
+# Run SyncZ (handles setup automatically)
+bash syncz_setup.sh
 ```
 
-### Storage Access in Termux
-To sync files with your Android device's storage:
+### 💻 Command Options
+
 ```bash
-# Allow Termux to access device storage
+# Unified interface with beautiful menu (recommended)
+python3 syncz
+
+# Direct server launch with beautiful interface
+python3 syncz -s
+
+# Client interface (same as default)
+python3 syncz -c
+```
+
+### 🎨 The SyncZ Experience
+
+When you launch SyncZ, you'll see:
+
+```
+==================================================
+           CURRENT CONFIGURATION
+==================================================
+📁 Sync Path:   /home/user/zoteroReference
+🌐 Server IP:   192.168.1.100
+🔌 Server Port: 8000
+==================================================
+
+╔================================================╗
+║                SyncZ Main Menu                 ║
+╠================================================╣
+║  1) 🚀 Sync now (Client mode)                     ║
+║  2) 🖥️  Start Server                              ║
+║  3) ⚙️  Change config (path/ip/port)               ║
+║  q) 🚪 Quit                                      ║
+╚================================================╝
+```
+
+## 🏗️ System Architecture
+
+### 🖥️ Server Mode
+- **Beautiful startup**: Colorful configuration display and status messages
+- **Real-time logging**: Colored request logging with timestamps and file details
+- **Smart metadata**: Automatic file list generation with integrity checking
+- **Graceful shutdown**: Professional stop messages
+
+### 💻 Client Mode
+- **Server detection**: Automatic connection validation with fallback to menu
+- **Smart sync logic**: Intelligent file comparison and transfer decisions
+- **Safety confirmations**: PDF deletion requires user confirmation
+- **Recycle bin**: Deleted files moved to `deleted/` folder with 10-day auto-cleanup
+
+## 📋 Requirements
+
+- **Python**: 3.6+ 
+- **Dependencies**: `requests`, `colorama` (auto-installed)
+- **Network**: Local network connectivity between devices
+
+### 📱 For Mobile Devices (Termux)
+
+```bash
+# Install Termux from F-Droid (recommended)
+# Then run these commands:
+
+pkg update && pkg upgrade
+pkg install python git
+pip install requests colorama
+```
+
+## ⚙️ Configuration
+
+SyncZ uses a `config.json` file that's automatically created and managed through the beautiful interface:
+
+```json
+{
+  "path": "/home/user/zoteroReference",
+  "server_ip": "192.168.1.100", 
+  "server_port": 8000
+}
+```
+
+### 🔧 Easy Configuration Management
+
+1. **Launch SyncZ**: `python3 syncz`
+2. **Select option 3**: ⚙️ Change config
+3. **Update settings**: Interactive prompts with current values displayed
+4. **Automatic saving**: Configuration saved automatically
+
+## 🌐 Network Setup
+
+### 🔍 Find Your Server IP
+```bash
+# Linux/Mac/Termux
+ip addr show | grep inet
+# or
+hostname -I
+
+# Windows
+ipconfig
+```
+
+### 📡 Network Requirements
+- Both devices on the same WiFi network
+- Firewall allows connections on port 8000 (default)
+- Server device accessible from client device
+
+## 📱 Termux Integration
+
+### 📲 Installing Termux
+- **✅ Recommended**: [F-Droid](https://f-droid.org/packages/com.termux/) 
+- **⚠️ Alternative**: [GitHub Releases](https://github.com/termux/termux-app/releases)
+- **❌ Avoid**: Google Play Store version (outdated)
+
+### 🔧 Termux Setup
+```bash
+# Update system
+pkg update && pkg upgrade
+
+# Install dependencies  
+pkg install python git
+
+# Setup storage access
 termux-setup-storage
 
-# Your Android storage will be available at:
-# ~/storage/shared (Internal storage)
-# ~/storage/external-1 (SD card, if available)
+# Clone SyncZ
+git clone https://github.com/jorgemunozl/syncFilesDevicesLocal.git
+cd syncZ
+
+# Run SyncZ
+python3 syncz
 ```
 
+### 📂 Storage Access in Termux
+```bash
+# Your Android storage paths:
+~/storage/shared          # Internal storage
+~/storage/external-1       # SD card (if available)
+~/storage/dcim            # Camera photos
+~/storage/downloads       # Downloads folder
+```
 
-## Zotero Integrations (Planned)
+## 🛡️ Safety Features
 
-In the future, SyncZ will offer deeper integration with [Zotero](https://www.zotero.org/), the open-source reference manager. Planned features include:
+### 🗑️ Recycle Bin System
+- **Deleted files** moved to `deleted/` folder instead of permanent deletion
+- **10-day auto-cleanup** of old files in recycle bin
+- **PDF confirmation** required before deletion
+- **Timestamp tracking** for deletion date management
 
-- Automatic sync of Zotero libraries and attachments
-- Support for syncing `.betterbibtex` export files for citation management
-- Integration with Zotero plugins and custom metadata
-- Smart conflict resolution for reference files
+### ⚠️ Error Handling
+- **Server connectivity** checks with graceful fallback
+- **File operation** error handling with clear messages
+- **Configuration validation** with helpful error messages
+- **Network timeout** handling with retry options
 
-### Example Zotero Sync Scenarios
+## 🎯 Use Cases
 
-- **Syncing Better BibTeX exports:**
-  - Keep your `MyLibrary.bib` or `.betterbibtex` files up to date across devices
-  - Example: `~/Zotero/BetterBibTeX/MyLibrary.bib`
-- **Full Zotero data folder sync:**
-  - Example: `~/Zotero` (syncs all attachments, notes, and metadata)
-- **Selective group library sync:**
-  - Example: `~/Zotero/groups/1234567`
+### 📚 Academic & Research
+- **Zotero Libraries**: Sync research papers and references
+- **BibTeX Files**: Keep `.bib` files synchronized for LaTeX
+- **Research Notes**: Sync markdown files and documentation
 
-Stay tuned for more Zotero-focused features and workflow enhancements!
+### 💼 Development
+- **Code Projects**: Sync between development environments  
+- **Configuration Files**: Keep dotfiles and configs in sync
+- **Documentation**: Sync project documentation and notes
 
-## Example Use Cases
+### 📄 General Use
+- **Document Backup**: Important files backed up across devices
+- **Media Files**: Photos, music, videos synchronized
+- **Mobile Workflows**: Access desktop files on mobile devices
 
-1. **Zotero Reference Sync**: Keep research papers and references synchronized between desktop and mobile
-2. **Sync Better BibTeX files**: Keep `.betterbibtex` or `.bib` files in sync for LaTeX workflows
-3. **Document Backup**: Ensure important documents are backed up across devices
-4. **Development Files**: Sync code projects between development environments
-5. **Media Files**: Keep photos, music, or videos synchronized
+## 🚨 Troubleshooting
 
-## Troubleshooting
+### 🔌 Connection Issues
+```bash
+# Test connectivity
+ping <server-ip>
 
-### Connection Issues
-- Verify both devices are on the same network
-- Check IP address configuration
-- Ensure firewall allows connections on the specified port
-- Test connectivity: `ping <server-ip>`
+# Check if server is running
+curl http://<server-ip>:8000/metadata
 
-### Permission Issues
-- Ensure Python has read/write permissions for sync directories
-- In Termux, use `termux-setup-storage` for broader file access
+# Verify network configuration
+ip route | grep default
+```
 
-### File Conflicts
-- The system prioritizes newer files based on modification time
-- Files are compared using SHA256 hashes for integrity
-- Manual intervention may be needed for complex conflicts
+### 📁 Permission Issues
+```bash
+# Termux storage setup
+termux-setup-storage
 
-## Security Considerations
+# Check directory permissions
+ls -la <sync-directory>
 
-- This tool is designed for trusted local networks
-- No authentication or encryption is implemented
-- Consider using VPN for remote synchronization
-- Be cautious when exposing the server to external networks
+# Fix permissions if needed
+chmod -R 755 <sync-directory>
+```
 
-## License
+### 🔄 Sync Issues
+- **File conflicts**: Newer files take priority (by modification time)
+- **Hash mismatches**: Files re-downloaded for integrity
+- **Missing files**: Check path configuration and permissions
+- **Large files**: Monitor network stability for big transfers
 
-[Add your preferred license here]
+## 🔐 Security Considerations
 
-## Contributing
+- **Local Network Only**: Designed for trusted local networks
+- **No Authentication**: No built-in user authentication
+- **No Encryption**: Data transferred in plain text
+- **VPN Recommended**: For remote access scenarios
+- **Firewall Rules**: Limit access to trusted devices only
 
-Contributions are welcome! Please feel free to submit pull requests or open issues for bugs and feature requests.
+## 🤝 Contributing
+
+We welcome contributions! Here's how to help:
+
+1. **🍴 Fork** the repository
+2. **🌿 Create** a feature branch (`git checkout -b feature/amazing-feature`)
+3. **💻 Commit** your changes (`git commit -m 'Add amazing feature'`)
+4. **📤 Push** to the branch (`git push origin feature/amazing-feature`)
+5. **🔀 Open** a Pull Request
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- **Colorama**: For beautiful terminal colors
+- **Requests**: For reliable HTTP operations  
+- **Termux Community**: For mobile Linux environment
+- **Python Community**: For the excellent ecosystem
+
+---
+
+## 📞 Support
+
+If you encounter issues or have questions:
+
+1. **📖 Check** this README for solutions
+2. **🔍 Search** existing issues on GitHub
+3. **🐛 Create** a new issue with detailed information
+4. **💬 Join** discussions in the repository
+
+---
+
+*Made with ❤️ for seamless cross-device synchronization*

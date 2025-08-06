@@ -4,10 +4,38 @@ import hashlib
 import os
 import json
 import socketserver
-
-
+from datetime import datetime
 from email.parser import BytesParser
 from email.policy import default as email_default_policy
+
+# Try to import colorama for colored output
+try:
+    from colorama import Fore, Style, init as colorama_init
+    colorama_init()
+    COLOR_ENABLED = True
+except ImportError:
+    # Fallback for when colorama is not available
+    class Fore:
+        RED = ""
+        GREEN = ""
+        YELLOW = ""
+        BLUE = ""
+        MAGENTA = ""
+        CYAN = ""
+        WHITE = ""
+        RESET = ""
+    
+    class Style:
+        RESET_ALL = ""
+    
+    COLOR_ENABLED = False
+
+
+def ctext(text, color=None):
+    """Apply color to text if colorama is available"""
+    if COLOR_ENABLED and color:
+        return color + text + Style.RESET_ALL
+    return text
 
 
 # --- Configuration ---
@@ -24,6 +52,18 @@ def load_config():
         "port": DEFAULT_PORT
     }
 
+def show_server_config():
+    """Display current server configuration with beautiful formatting"""
+    config = load_config()
+    print(ctext("\n" + "=" * 50, Fore.CYAN))
+    print(ctext("           SYNCZ SERVER CONFIGURATION", Fore.GREEN))
+    print(ctext("=" * 50, Fore.CYAN))
+    print(ctext("📁 Sync Path: ", Fore.YELLOW) + ctext(f"{config.get('path', DEFAULT_PATH)}", Fore.WHITE))
+    print(ctext("🔌 Server Port: ", Fore.YELLOW) + ctext(f"{config.get('port', DEFAULT_PORT)}", Fore.WHITE))
+    print(ctext("🌐 Server IP: ", Fore.YELLOW) + ctext("0.0.0.0 (all interfaces)", Fore.WHITE))
+    print(ctext("=" * 50, Fore.CYAN))
+
+
 config = load_config()
 path = config.get("path", DEFAULT_PATH)
 PORT = config.get("port", DEFAULT_PORT)
@@ -31,6 +71,17 @@ METADATA_PATH = 'file_list.json'
 os.chdir(path)
 
 class SyncHandler(http.server.SimpleHTTPRequestHandler):
+    def log_message(self, format, *args):
+        """Override to add colored logging"""
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        message = format % args
+        if "GET" in message:
+            print(ctext(f"📥 [{timestamp}] {message}", Fore.BLUE))
+        elif "POST" in message:
+            print(ctext(f"📤 [{timestamp}] {message}", Fore.GREEN))
+        else:
+            print(ctext(f"ℹ️  [{timestamp}] {message}", Fore.CYAN))
+    
     def do_GET(self):
         if self.path == '/metadata':
             try:
@@ -41,8 +92,10 @@ class SyncHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_header('Content-Length', str(len(data)))
                 self.end_headers()
                 self.wfile.write(data)
+                print(ctext(f"✅ Served metadata ({len(data)} bytes)", Fore.GREEN))
             except FileNotFoundError:
                 self.send_error(404, "Metadata not found")
+                print(ctext("❌ Metadata file not found", Fore.RED))
         else:
             super().do_GET()
 
@@ -92,12 +145,13 @@ class SyncHandler(http.server.SimpleHTTPRequestHandler):
                 f.write(fileitem.get_payload(decode=True))
             if mtime:
                 os.utime(filepath, (mtime, mtime))
-            print(f"Saved uploaded file {filename}")
+            print(ctext(f"📁 Uploaded: {filename} ({os.path.getsize(filepath)} bytes)", Fore.GREEN))
             self.send_response(200)
             self.end_headers()
             self.wfile.write(b'OK')
         else:
             self.send_error(404, "POST path not supported")
+            print(ctext(f"❌ Unsupported POST path: {self.path}", Fore.RED))
 
 
 def sha256sum(path):
@@ -128,11 +182,21 @@ path = "/home/jorge/zoteroReference"
 
 
 def main():
-    os.chdir(path)
+    print(ctext("\n🚀 Starting SyncZ Server...", Fore.GREEN))
+    show_server_config()
+    
+    try:
+        os.chdir(path)
+        print(ctext(f"\n📂 Changed to directory: {path}", Fore.BLUE))
+    except Exception as e:
+        print(ctext(f"❌ Failed to change to directory {path}: {e}", Fore.RED))
+        return
+    
+    print(ctext("\n📋 Generating file metadata...", Fore.YELLOW))
     data = generate_file_list(path)
     with open("file_list.json", "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
-    print(f"Generated file_list.json with {len(data)} items.")
+    print(ctext(f"✅ Generated file_list.json with {len(data)} files", Fore.GREEN))
 
     Handler = SyncHandler
 
@@ -143,12 +207,21 @@ def main():
             super().__init__(*args, **kwargs)
             self.should_shutdown = False
 
+    print(ctext(f"\n🌐 Server starting on all interfaces, port {PORT}...", Fore.CYAN))
+    print(ctext("=" * 50, Fore.CYAN))
+    print(ctext("🟢 SyncZ Server is READY!", Fore.GREEN))
+    print(ctext("🔗 Access from clients:", Fore.YELLOW))
+    print(ctext(f"   📱 Local: http://localhost:{PORT}", Fore.WHITE))
+    print(ctext(f"   🌍 Network: http://<your-ip>:{PORT}", Fore.WHITE))
+    print(ctext("⌨️  Press Ctrl+C to stop the server", Fore.YELLOW))
+    print(ctext("=" * 50, Fore.CYAN))
+    
     with ReuseAddrTCPServer(('0.0.0.0', PORT), Handler) as httpd:
-        print(f"Serving HTTP and metadata at port {PORT}")
         try:
             httpd.serve_forever()
         except KeyboardInterrupt:
-            print("Shutting down server.")
+            print(ctext("\n\n🛑 Shutting down server gracefully...", Fore.YELLOW))
+            print(ctext("👋 SyncZ Server stopped. Goodbye!", Fore.GREEN))
 
 
 if __name__ == "__main__":
