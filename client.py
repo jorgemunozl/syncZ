@@ -88,6 +88,10 @@ def move_to_deleted(file_path, deleted_dir="deleted"):
 def generate_file_list(root_dir):
     rows = []
     for dirpath, _, filenames in os.walk(root_dir):
+        # Skip the deleted directory and its subdirectories
+        if "deleted" in os.path.relpath(dirpath, root_dir).split(os.sep):
+            continue
+            
         for fname in filenames:
             # Skip hidden files if needed
             if fname.startswith("."):
