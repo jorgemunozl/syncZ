@@ -155,6 +155,22 @@ def do_sync():
             if d["name"] == name:
                 to_upload.remove(d)
                 break
+        
+        # Ask confirmation before deleting PDF files
+        if name.lower().endswith('.pdf'):
+            while True:
+                confirm = input(f"Delete PDF file '{name}' (removed on server)? (y/n): ").strip().lower()
+                if confirm in ['y', 'yes']:
+                    break
+                elif confirm in ['n', 'no']:
+                    print(f"Skipping deletion of {name}")
+                    continue
+                else:
+                    print("Please answer y or n.")
+                    continue
+            if confirm in ['n', 'no']:
+                continue
+        
         print(f"Deleting local file {name} (removed on server)...")
         try:
             os.remove(os.path.join(DOWNLOAD_DIR, name))
