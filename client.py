@@ -346,8 +346,8 @@ def do_sync():
     SERVER_PORT = config.get("server_port", DEFAULT_SERVER_PORT)
     BASE_URL = f"http://{SERVER_IP}:{SERVER_PORT}"
     METADATA_URL = f"{BASE_URL}/metadata"
-    LOCAL_JSON = "file_list.json"
-    DOWNLOAD_DIR = "."
+    # Note: we intentionally do not define LOCAL_JSON or a download dir here,
+    # as we no longer perform local deletions based on server state.
     DELETED_DIR = "deleted"
     
     # Clean up old deleted files first
@@ -413,44 +413,11 @@ def do_sync():
         orig_mtime = remote_index[name][1]
         os.utime(name, (orig_mtime, orig_mtime))
 
-    to_delete = [
-        name for name in local_index
-        # never delete your metadata file itself
-        if name not in remote_index and name != LOCAL_JSON
-    ]
-
-    # 5. To delete.
-    if to_delete:
-        print(ctext(f"\n🗑️  Moving {len(to_delete)} files to deleted folder...", Fore.YELLOW))
-    for name in to_delete:
-        for d in to_upload:
-            if d["name"] == name:
-                to_upload.remove(d)
-                break
-        
-        # Ask confirmation before deleting PDF files
-        if name.lower().endswith('.pdf'):
-            while True:
-                confirm = input(f"Move PDF file '{name}' to deleted folder? (y/n): ").strip().lower()
-                if confirm in ['y', 'yes']:
-                    break
-                elif confirm in ['n', 'no']:
-                    print(f"Skipping deletion of {name}")
-                    break
-                else:
-                    print("Please answer y or n.")
-            if confirm in ['n', 'no']:
-                continue
-        
-        print(ctext(f"  📁 Moving {name} to deleted folder...", Fore.YELLOW))
-        file_path = os.path.join(DOWNLOAD_DIR, name)
-        if os.path.exists(file_path):
-            if move_to_deleted(file_path, DELETED_DIR):
-                print(ctext(f"  ✅ Moved to deleted folder (will be permanently deleted in 10 days)", Fore.GREEN))
-            else:
-                print(ctext(f"  ❌ Failed to move {name}", Fore.RED))
-        else:
-            print(ctext(f"  ⚠️  File {name} not found locally", Fore.YELLOW))
+    # Important: do not delete local-only files.
+    # If a file exists locally but not on the server, treat it as a
+    # candidate for upload (two-way sync behavior).
+    # Deletions would require explicit tombstones or a force-mirror mode,
+    # which we do not implement here to avoid accidental data loss.
 
     # 5. Upload new/changed (server must implement POST /upload)
     if to_upload:
@@ -465,8 +432,6 @@ def do_sync():
 
     # 6. Update local metadata
     print(ctext("\n🎉 Sync complete! All files are up to date.", Fore.GREEN))
-
-
 
 if __name__ == "__main__":
     main_menu()
