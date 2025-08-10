@@ -308,8 +308,12 @@ def main_menu():
 def change_config():
     config = load_config()
     print(f"Current path: {config.get('path', DEFAULT_PATH)}")
-    new_path = input("Enter new sync path (leave blank to keep): ").strip()
-    if new_path:
+    print("Options: press Enter to keep current, or 't' for Termux preset")
+    print("Termux preset path: /root/shared/zoteroReference")
+    new_path = input("New sync path or shortcut: ").strip()
+    if new_path.lower() in ("t", "termux"):
+        config["path"] = "/root/shared/zoteroReference"
+    elif new_path:
         config["path"] = new_path
     print(f"Current server IP: {config.get('server_ip', DEFAULT_SERVER_IP)}")
     new_ip = input("Enter new server IP (leave blank to keep): ").strip()
