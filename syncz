@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import sys
 import os
-import subprocess
 
 # Support: syncz -c   => python client.py (unified menu)
 #         syncz -s   => python run_server.py (with beautiful interface)
@@ -10,18 +9,38 @@ import subprocess
 
 SCRIPT_ROOT = os.path.dirname(os.path.abspath(__file__))
 
+
 def setup_environment():
     """Setup virtual environment and dependencies if needed"""
     env_path = os.path.join(SCRIPT_ROOT, '.env')
     if os.path.exists(os.path.join(env_path, 'bin', 'activate')):
-        # Activate virtual environment
-        activate_script = os.path.join(env_path, 'bin', 'activate')
         # Set environment variables that would be set by sourcing activate
         os.environ['VIRTUAL_ENV'] = env_path
-        os.environ['PATH'] = os.path.join(env_path, 'bin') + ':' + os.environ.get('PATH', '')
+        path_prefix = os.path.join(env_path, 'bin')
+        os.environ['PATH'] = path_prefix + ':' + os.environ.get('PATH', '')
         # Use the virtual environment's python
-        return os.path.join(env_path, 'bin', 'python')
-    return sys.executable
+        python_exe = os.path.join(env_path, 'bin', 'python')
+        
+        # Quick dependency check
+        try:
+            import subprocess
+            result = subprocess.run([
+                python_exe, '-c', 'import requests, colorama'
+            ], capture_output=True, text=True)
+            if result.returncode != 0:
+                print("⚠️  Dependencies missing. Please run: "
+                      "bash syncz_setup.sh")
+                sys.exit(1)
+        except Exception:
+            print("⚠️  Environment setup incomplete. Please run: "
+                  "bash syncz_setup.sh")
+            sys.exit(1)
+            
+        return python_exe
+    else:
+        print("⚠️  Virtual environment not found. Please run: "
+              "bash syncz_setup.sh")
+        sys.exit(1)
 
 usage = """
 Usage:
@@ -33,28 +52,37 @@ Usage:
 def main():
     python_exe = setup_environment()
     
-    # Handle different argument patterns
-    if len(sys.argv) == 1:
-        # No arguments: default to unified interface
-        script = os.path.join(SCRIPT_ROOT, 'client.py')
-        os.execv(python_exe, [python_exe, script])
-        
-    elif len(sys.argv) == 2:
-        flag = sys.argv[1]
-        if flag == '-c':
-            # Client: use unified interface
+    # Change to the script directory to ensure relative paths work
+    original_cwd = os.getcwd()
+    os.chdir(SCRIPT_ROOT)
+    
+    try:
+        # Handle different argument patterns
+        if len(sys.argv) == 1:
+            # No arguments: default to unified interface
             script = os.path.join(SCRIPT_ROOT, 'client.py')
             os.execv(python_exe, [python_exe, script])
-        elif flag == '-s':
-            # Server: use beautiful server interface
-            script = os.path.join(SCRIPT_ROOT, 'run_server.py')
-            os.execv(python_exe, [python_exe, script])
+            
+        elif len(sys.argv) == 2:
+            flag = sys.argv[1]
+            if flag == '-c':
+                # Client: use unified interface
+                script = os.path.join(SCRIPT_ROOT, 'client.py')
+                os.execv(python_exe, [python_exe, script])
+            elif flag == '-s':
+                # Server: use beautiful server interface
+                script = os.path.join(SCRIPT_ROOT, 'run_server.py')
+                os.execv(python_exe, [python_exe, script])
+            else:
+                print(usage)
+                sys.exit(1)
         else:
             print(usage)
             sys.exit(1)
-    else:
-        print(usage)
-        sys.exit(1)
+    except Exception as e:
+        # Restore original directory if something goes wrong
+        os.chdir(original_cwd)
+        raise e
 
 
 if __name__ == "__main__":

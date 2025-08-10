@@ -1,4 +1,3 @@
-
 import os
 import json
 import hashlib
@@ -7,6 +6,13 @@ import sys
 import time
 import shutil
 from datetime import datetime, timedelta
+import re
+import unicodedata
+try:
+    from wcwidth import wcwidth as _wcwidth, wcswidth as _wcswidth
+except Exception:
+    _wcwidth = None
+    _wcswidth = None
 
 # Try to import colorama for colored output
 try:
@@ -122,28 +128,169 @@ def load_config():
         "server_port": DEFAULT_SERVER_PORT
     }
 
+def get_primary_ip():
+    """Return the primary local IPv4 address used for outbound connections."""
+    try:
+        import socket
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            s.connect(("8.8.8.8", 80))
+            ip = s.getsockname()[0]
+        finally:
+            s.close()
+        return ip
+    except Exception:
+        try:
+            import socket
+            return socket.gethostbyname(socket.gethostname())
+        except Exception:
+            return "127.0.0.1"
+
 def show_current_config():
     config = load_config()
     print(ctext("\n" + "=" * 50, Fore.CYAN))
     print(ctext("           CURRENT CONFIGURATION", Fore.GREEN))
     print(ctext("=" * 50, Fore.CYAN))
+    # Show local primary IP so the user can verify network details
+    local_ip = get_primary_ip()
+    print(ctext("🖥 Local IP:    ", Fore.YELLOW) + ctext(local_ip, Fore.WHITE))
     print(ctext(f"📁 Sync Path:   ", Fore.YELLOW) + ctext(f"{config.get('path', DEFAULT_PATH)}", Fore.WHITE))
     print(ctext(f"🌐 Server IP:   ", Fore.YELLOW) + ctext(f"{config.get('server_ip', DEFAULT_SERVER_IP)}", Fore.WHITE))
     print(ctext(f"🔌 Server Port: ", Fore.YELLOW) + ctext(f"{config.get('server_port', DEFAULT_SERVER_PORT)}", Fore.WHITE))
     print(ctext("=" * 50, Fore.CYAN))
 
+def sha256sum(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(4096), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+NARROW_EMOJI = {"🖥", "⚙"}
+
+def strip_ansi(s: str) -> str:
+    return ANSI_RE.sub("", s)
+
+# Fallback emoji detection (used only if wcwidth is unavailable)
+def _is_emoji(ch: str) -> bool:
+    cp = ord(ch)
+    return (
+        0x1F300 <= cp <= 0x1F5FF or
+        0x1F600 <= cp <= 0x1F64F or
+        0x1F680 <= cp <= 0x1F6FF or
+        0x1F900 <= cp <= 0x1F9FF or
+        0x1FA70 <= cp <= 0x1FAFF or
+        0x2600  <= cp <= 0x26FF  or
+        0x2700  <= cp <= 0x27BF
+    )
+
+def _char_width(ch: str) -> int:
+    # Handle zero-width characters explicitly in fallback path
+    # Variation Selectors and Joiners
+    if ord(ch) in (0xFE0E, 0xFE0F, 0x200D, 0x200B, 0x2060):
+        return 0
+    if _wcwidth is not None:
+        w = _wcwidth(ch)
+        return w if w > 0 else 0
+    # fallback heuristic
+    if unicodedata.combining(ch):
+        return 0
+    if _is_emoji(ch):
+        # Some terminals render certain emojis as narrow (width=1)
+        if ch in NARROW_EMOJI:
+            return 1
+        return 2
+    eaw = unicodedata.east_asian_width(ch)
+    if eaw in ("F", "W"):
+        return 2
+    return 1
+
+def _count_narrow_emoji_clusters(s: str) -> int:
+    count = 0
+    i = 0
+    while i < len(s):
+        ch = s[i]
+        if ch in NARROW_EMOJI:
+            # Optional variation selector
+            if i + 1 < len(s) and s[i + 1] == "\uFE0F":
+                i += 2
+            else:
+                i += 1
+            count += 1
+            continue
+        i += 1
+    return count
+
+
+def visible_width(s: str) -> int:
+    s2 = strip_ansi(s)
+    if _wcswidth is not None:
+        w = _wcswidth(s2)
+        if w < 0:
+            w = 0
+        # Adjust for emojis that render as narrow in many terminals
+        w -= _count_narrow_emoji_clusters(s2)
+        return max(w, 0)
+    return sum(_char_width(ch) for ch in s2)
+
+def _truncate_to_width(text: str, width: int) -> str:
+    total = 0
+    out = []
+    for ch in text:
+        w = _char_width(ch)
+        if total + w > width:
+            break
+        out.append(ch)
+        total += w
+    return "".join(out)
+
+def line_content(text: str, width: int, align: str = "left") -> str:
+    text = _truncate_to_width(text, width)
+    w = visible_width(text)
+    pad = max(0, width - w)
+    if align == "center":
+        left = pad // 2
+        right = pad - left
+        return " " * left + text + " " * right
+    return text + " " * pad
+
+def box_top(width: int) -> str:
+    return ctext("╔" + "═" * width + "╗", Fore.CYAN)
+
+def box_sep(width: int) -> str:
+    return ctext("╠" + "═" * width + "╣", Fore.CYAN)
+
+def box_bottom(width: int) -> str:
+    return ctext("╚" + "═" * width + "╝", Fore.CYAN)
+
+def box_line(text: str, width: int, content_color=Fore.WHITE, align: str = "left") -> str:
+    return (
+        ctext("║", Fore.CYAN)
+        + ctext(line_content(text, width, align=align), content_color)
+        + ctext("║", Fore.CYAN)
+    )
+
 def main_menu():
     show_current_config()
+    width = 48
     while True:
-        print(ctext("\n" + "╔" + "=" * 48 + "╗", Fore.CYAN))
-        print(ctext("║" + " " * 16 + "SyncZ Main Menu" + " " * 17 + "║", Fore.GREEN))
-        print(ctext("╠" + "=" * 48 + "╣", Fore.CYAN))
-        print(ctext("║  ", Fore.CYAN) + ctext("1)", Fore.YELLOW) + ctext(" 🚀 Sync now (Client mode)" + " " * 21 + "║", Fore.WHITE))
-        print(ctext("║  ", Fore.CYAN) + ctext("2)", Fore.YELLOW) + ctext(" 🖥️  Start Server" + " " * 30 + "║", Fore.WHITE))
-        print(ctext("║  ", Fore.CYAN) + ctext("3)", Fore.YELLOW) + ctext(" ⚙️  Change config (path/ip/port)" + " " * 15 + "║", Fore.WHITE))
-        print(ctext("║  ", Fore.CYAN) + ctext("q)", Fore.YELLOW) + ctext(" 🚪 Quit" + " " * 38 + "║", Fore.WHITE))
-        print(ctext("╚" + "=" * 48 + "╝", Fore.CYAN))
-        
+        print(ctext("\n" + box_top(width), None))
+        print(
+            box_line(
+                "SyncZ Main Menu",
+                width,
+                content_color=Fore.GREEN,
+                align="center",
+            )
+        )
+        print(box_sep(width))
+        print(box_line("1) 🚀 Sync now (Client mode)", width))
+        print(box_line("2) 🖥 Start Server", width))
+        print(box_line("3) ⚙ Change config (path/ip/port)", width))
+        print(box_line("q) 🚪 Quit", width))
+        print(box_bottom(width))
+
         choice = input(ctext("Choose an option: ", Fore.YELLOW)).strip().lower()
         if choice == "1":
             do_sync()
@@ -319,14 +466,6 @@ def do_sync():
     # 6. Update local metadata
     print(ctext("\n🎉 Sync complete! All files are up to date.", Fore.GREEN))
 
-
-
-def sha256sum(path):
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(4096), b""):
-            h.update(chunk)
-    return h.hexdigest()
 
 
 if __name__ == "__main__":

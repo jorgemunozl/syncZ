@@ -52,12 +52,32 @@ def load_config():
         "port": DEFAULT_PORT
     }
 
+def get_primary_ip():
+    try:
+        import socket
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            s.connect(("8.8.8.8", 80))
+            ip = s.getsockname()[0]
+        finally:
+            s.close()
+        return ip
+    except Exception:
+        try:
+            import socket
+            return socket.gethostbyname(socket.gethostname())
+        except Exception:
+            return "127.0.0.1"
+
+
 def show_server_config():
     """Display current server configuration with beautiful formatting"""
     config = load_config()
     print(ctext("\n" + "=" * 50, Fore.CYAN))
     print(ctext("           SYNCZ SERVER CONFIGURATION", Fore.GREEN))
     print(ctext("=" * 50, Fore.CYAN))
+    local_ip = get_primary_ip()
+    print(ctext("🖥️  Local IP: ", Fore.YELLOW) + ctext(local_ip, Fore.WHITE))
     print(ctext("📁 Sync Path: ", Fore.YELLOW) + ctext(f"{config.get('path', DEFAULT_PATH)}", Fore.WHITE))
     print(ctext("🔌 Server Port: ", Fore.YELLOW) + ctext(f"{config.get('port', DEFAULT_PORT)}", Fore.WHITE))
     print(ctext("🌐 Server IP: ", Fore.YELLOW) + ctext("0.0.0.0 (all interfaces)", Fore.WHITE))
@@ -211,15 +231,16 @@ def main():
             super().__init__(*args, **kwargs)
             self.should_shutdown = False
 
+    local_ip = get_primary_ip()
     print(ctext(f"\n🌐 Server starting on all interfaces, port {PORT}...", Fore.CYAN))
     print(ctext("=" * 50, Fore.CYAN))
     print(ctext("🟢 SyncZ Server is READY!", Fore.GREEN))
     print(ctext("🔗 Access from clients:", Fore.YELLOW))
     print(ctext(f"   📱 Local: http://localhost:{PORT}", Fore.WHITE))
-    print(ctext(f"   🌍 Network: http://<your-ip>:{PORT}", Fore.WHITE))
+    print(ctext(f"   🌍 Network: http://{local_ip}:{PORT}", Fore.WHITE))
     print(ctext("⌨️  Press Ctrl+C to stop the server", Fore.YELLOW))
     print(ctext("=" * 50, Fore.CYAN))
-    
+
     with ReuseAddrTCPServer(('0.0.0.0', PORT), Handler) as httpd:
         try:
             httpd.serve_forever()
