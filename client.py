@@ -102,6 +102,9 @@ def generate_file_list(root_dir):
             # Skip hidden files if needed
             if fname.startswith("."):
                 continue
+            # Skip JSON files
+            if fname.lower().endswith('.json'):
+                continue
             full = os.path.join(dirpath, fname)
             rows.append({
                 "name": os.path.relpath(full, root_dir).replace("\\", "/"),
@@ -154,9 +157,21 @@ def show_current_config():
     # Show local primary IP so the user can verify network details
     local_ip = get_primary_ip()
     print(ctext("🖥 Local IP:    ", Fore.YELLOW) + ctext(local_ip, Fore.WHITE))
-    print(ctext(f"📁 Sync Path:   ", Fore.YELLOW) + ctext(f"{config.get('path', DEFAULT_PATH)}", Fore.WHITE))
-    print(ctext(f"🌐 Server IP:   ", Fore.YELLOW) + ctext(f"{config.get('server_ip', DEFAULT_SERVER_IP)}", Fore.WHITE))
-    print(ctext(f"🔌 Server Port: ", Fore.YELLOW) + ctext(f"{config.get('server_port', DEFAULT_SERVER_PORT)}", Fore.WHITE))
+    print(
+        ctext("📁 Sync Path:   ", Fore.YELLOW)
+        + ctext(f"{config.get('path', DEFAULT_PATH)}", Fore.WHITE)
+    )
+    print(
+        ctext("🌐 Server IP:   ", Fore.YELLOW)
+        + ctext(f"{config.get('server_ip', DEFAULT_SERVER_IP)}", Fore.WHITE)
+    )
+    print(
+        ctext("🔌 Server Port: ", Fore.YELLOW)
+        + ctext(
+            f"{config.get('server_port', DEFAULT_SERVER_PORT)}",
+            Fore.WHITE,
+        )
+    )
     print(ctext("=" * 50, Fore.CYAN))
 
 def sha256sum(path):
@@ -181,8 +196,8 @@ def _is_emoji(ch: str) -> bool:
         0x1F680 <= cp <= 0x1F6FF or
         0x1F900 <= cp <= 0x1F9FF or
         0x1FA70 <= cp <= 0x1FAFF or
-        0x2600  <= cp <= 0x26FF  or
-        0x2700  <= cp <= 0x27BF
+        0x2600 <= cp <= 0x26FF or
+        0x2700 <= cp <= 0x27BF
     )
 
 def _char_width(ch: str) -> int:
@@ -459,14 +474,22 @@ def do_sync():
     with open("file_list.json", "w", encoding="utf-8") as f:
         json.dump(local_meta, f, indent=2)
 
-    remote_index = {m["name"]: (m["sha256"], m.get("mtime", 0)) for m in remote_meta}
-    local_index  = {m["name"]: (m["sha256"], m.get("mtime", 0)) for m in local_meta}
+    remote_index = {
+        m["name"]: (m["sha256"], m.get("mtime", 0))
+        for m in remote_meta
+        if not m["name"].lower().endswith('.json')
+    }
+    local_index = {
+        m["name"]: (m["sha256"], m.get("mtime", 0))
+        for m in local_meta
+        if not m["name"].lower().endswith('.json')
+    }
 
     to_download = [
         name for name, (remote_hash, remote_mtime) in remote_index.items()
         if (
             name not in local_index or
-            local_index[name][1] < remote_mtime  
+            local_index[name][1] < remote_mtime
             )
         ]
 
@@ -478,12 +501,18 @@ def do_sync():
             remote_index.get(m["name"], ("", 0))[1] < m["mtime"]  # local is newer
         )
     ]
-    to_upload = [m for m in to_upload if m["name"] != "file_list.json"]
+    to_upload = [
+        m for m in to_upload
+        if not m["name"].lower().endswith('.json')
+    ]
 
     # Ask user what to do with local-only orphan files (not on server)
     orphans = [
         m for m in local_meta
-        if m["name"] not in remote_index and m["name"] != "file_list.json"
+        if (
+            not m["name"].lower().endswith('.json')
+            and m["name"] not in remote_index
+        )
     ]
     if orphans:
         print(
