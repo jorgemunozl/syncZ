@@ -115,7 +115,8 @@ def generate_file_list(root_dir):
 
 
 # --- Configuration ---
-CONFIG_FILE = "config.json"
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+CONFIG_FILE = os.path.join(SCRIPT_DIR, "config.json")
 DEFAULT_PATH = "/root/shared/zoteroReference"
 DEFAULT_SERVER_IP = "192.168.43.119"
 DEFAULT_SERVER_PORT = 8000
@@ -299,68 +300,75 @@ def delete_orphan_locals():
     # Clean up old deleted files first
     clean_old_deleted_files(DELETED_DIR, days=10)
 
+    orig_cwd = os.getcwd()
     try:
-        os.chdir(path)
-    except Exception as e:
-        print(ctext(f"Failed to change to sync path {path}: {e}", Fore.RED))
-        return
+        try:
+            os.chdir(path)
+        except Exception as e:
+            print(ctext(f"Failed to change to sync path {path}: {e}", Fore.RED))
+            return
 
-    print(ctext("\n🔍 Fetching remote metadata...", Fore.BLUE))
-    try:
-        resp = requests.get(METADATA_URL, timeout=5)
-        resp.raise_for_status()
-        remote_meta = resp.json()
-        print(ctext("✅ Remote metadata fetched successfully", Fore.GREEN))
-    except requests.exceptions.RequestException as e:
-        print(ctext(f"\n❌ Could not connect to server at {SERVER_IP}:{SERVER_PORT}.", Fore.RED))
-        print(ctext(f"Error: {e}\n⬅️  Returning to main menu.", Fore.RED))
-        time.sleep(2)
-        return
+        print(ctext("\n🔍 Fetching remote metadata...", Fore.BLUE))
+        try:
+            resp = requests.get(METADATA_URL, timeout=5)
+            resp.raise_for_status()
+            remote_meta = resp.json()
+            print(ctext("✅ Remote metadata fetched successfully", Fore.GREEN))
+        except requests.exceptions.RequestException as e:
+            print(ctext(f"\n❌ Could not connect to server at {SERVER_IP}:{SERVER_PORT}.", Fore.RED))
+            print(ctext(f"Error: {e}\n⬅️  Returning to main menu.", Fore.RED))
+            time.sleep(2)
+            return
 
-    # Build indices
-    local_meta = generate_file_list(path)
-    remote_index = {m["name"]: True for m in remote_meta}
+        # Build indices
+        local_meta = generate_file_list(path)
+        remote_index = {m["name"]: True for m in remote_meta}
 
-    to_delete = [
-        m["name"] for m in local_meta
-        if m["name"] != "file_list.json" and m["name"] not in remote_index
-    ]
+        to_delete = [
+            m["name"] for m in local_meta
+            if m["name"] != "file_list.json" and m["name"] not in remote_index
+        ]
 
-    if not to_delete:
-        print(ctext("\n✅ No local orphans to delete. Everything matches the server.", Fore.GREEN))
-        return
+        if not to_delete:
+            print(ctext("\n✅ No local orphans to delete. Everything matches the server.", Fore.GREEN))
+            return
 
-    print(ctext(f"\n🗑️  Found {len(to_delete)} local files not on server.", Fore.YELLOW))
-    proceed = input(ctext("Proceed to move them into 'deleted/'? (y/N): ", Fore.YELLOW)).strip().lower()
-    if proceed not in ("y", "yes"):
-        print(ctext("Cancelled.", Fore.YELLOW))
-        return
+        print(ctext(f"\n🗑️  Found {len(to_delete)} local files not on server.", Fore.YELLOW))
+        proceed = input(ctext("Proceed to move them into 'deleted/'? (y/N): ", Fore.YELLOW)).strip().lower()
+        if proceed not in ("y", "yes"):
+            print(ctext("Cancelled.", Fore.YELLOW))
+            return
 
-    for name in to_delete:
-        # Ask confirmation before deleting PDF files
-        if name.lower().endswith('.pdf'):
-            while True:
-                confirm = input(f"Move PDF file '{name}' to deleted folder? (y/n): ").strip().lower()
-                if confirm in ['y', 'yes']:
-                    break
-                elif confirm in ['n', 'no']:
-                    print(f"Skipping deletion of {name}")
-                    name = None
-                    break
+        for name in to_delete:
+            # Ask confirmation before deleting PDF files
+            if name.lower().endswith('.pdf'):
+                while True:
+                    confirm = input(f"Move PDF file '{name}' to deleted folder? (y/n): ").strip().lower()
+                    if confirm in ['y', 'yes']:
+                        break
+                    elif confirm in ['n', 'no']:
+                        print(f"Skipping deletion of {name}")
+                        name = None
+                        break
+                    else:
+                        print("Please answer y or n.")
+                if not name:
+                    continue
+
+            print(ctext(f"  📁 Moving {name} to deleted folder...", Fore.YELLOW))
+            file_path = os.path.join(".", name)
+            if os.path.exists(file_path):
+                if move_to_deleted(file_path, DELETED_DIR):
+                    print(ctext("  ✅ Moved (permanent deletion in 10 days)", Fore.GREEN))
                 else:
-                    print("Please answer y or n.")
-            if not name:
-                continue
-
-        print(ctext(f"  📁 Moving {name} to deleted folder...", Fore.YELLOW))
-        file_path = os.path.join(".", name)
-        if os.path.exists(file_path):
-            if move_to_deleted(file_path, DELETED_DIR):
-                print(ctext("  ✅ Moved (permanent deletion in 10 days)", Fore.GREEN))
+                    print(ctext(f"  ❌ Failed to move {name}", Fore.RED))
             else:
-                print(ctext(f"  ❌ Failed to move {name}", Fore.RED))
-        else:
-            print(ctext(f"  ⚠️  File {name} not found locally", Fore.YELLOW))
+                print(ctext(f"  ⚠️  File {name} not found locally", Fore.YELLOW))
+    finally:
+        try:
+            os.chdir(orig_cwd)
+        except Exception:
+            pass
 
 def main_menu():
     show_current_config()
@@ -376,10 +384,10 @@ def main_menu():
             )
         )
         print(box_sep(width))
-        print(box_line("1) 🚀 Sync now (Client mode)", width))
+        print(box_line("1) 🔀 Merge", width))
         print(box_line("2) 🖥 Start Server", width))
         print(box_line("3) ⚙ Change config (path/ip/port)", width))
-        print(box_line("4) 🧹 Mirror server (delete local orphans)", width))
+        print(box_line("4) 📤 Push (delete local orphans)", width))
         print(box_line("q) 🚪 Quit", width))
         print(box_bottom(width))
 
@@ -451,160 +459,168 @@ def do_sync():
     # Clean up old deleted files first
     clean_old_deleted_files(DELETED_DIR, days=10)
     
+    orig_cwd = os.getcwd()
     try:
-        os.chdir(path)
-    except Exception as e:
-        print(f"Failed to change to sync path {path}: {e}")
-        return
-    # 1. Fetch remote metadata
-    print(ctext("\n🔍 Fetching remote metadata...", Fore.BLUE))
-    try:
-        resp = requests.get(METADATA_URL, timeout=5)
-        resp.raise_for_status()
-        remote_meta = resp.json()
-        print(ctext("✅ Remote metadata fetched successfully", Fore.GREEN))
-    except requests.exceptions.RequestException as e:
-        print(ctext(f"\n❌ Could not connect to server at {SERVER_IP}:{SERVER_PORT}.", Fore.RED))
-        print(ctext(f"Error: {e}\n⬅️  Returning to main menu.", Fore.RED))
-        time.sleep(2)
-        return
+        try:
+            os.chdir(path)
+        except Exception as e:
+            print(f"Failed to change to sync path {path}: {e}")
+            return
+        # 1. Fetch remote metadata
+        print(ctext("\n🔍 Fetching remote metadata...", Fore.BLUE))
+        try:
+            resp = requests.get(METADATA_URL, timeout=5)
+            resp.raise_for_status()
+            remote_meta = resp.json()
+            print(ctext("✅ Remote metadata fetched successfully", Fore.GREEN))
+        except requests.exceptions.RequestException as e:
+            print(ctext(f"\n❌ Could not connect to server at {SERVER_IP}:{SERVER_PORT}.", Fore.RED))
+            print(ctext(f"Error: {e}\n⬅️  Returning to main menu.", Fore.RED))
+            time.sleep(2)
+            return
 
-    # 2. Compute local metadata
-    local_meta = generate_file_list(path)
-    with open("file_list.json", "w", encoding="utf-8") as f:
-        json.dump(local_meta, f, indent=2)
+        # 2. Compute local metadata
+        local_meta = generate_file_list(path)
+        with open("file_list.json", "w", encoding="utf-8") as f:
+            json.dump(local_meta, f, indent=2)
 
-    remote_index = {
-        m["name"]: (m["sha256"], m.get("mtime", 0))
-        for m in remote_meta
-        if not m["name"].lower().endswith('.json')
-    }
-    local_index = {
-        m["name"]: (m["sha256"], m.get("mtime", 0))
-        for m in local_meta
-        if not m["name"].lower().endswith('.json')
-    }
+        remote_index = {
+            m["name"]: (m["sha256"], m.get("mtime", 0))
+            for m in remote_meta
+            if not m["name"].lower().endswith('.json')
+        }
+        local_index = {
+            m["name"]: (m["sha256"], m.get("mtime", 0))
+            for m in local_meta
+            if not m["name"].lower().endswith('.json')
+        }
 
-    to_download = [
-        name for name, (remote_hash, remote_mtime) in remote_index.items()
-        if (
-            name not in local_index or
-            local_index[name][1] < remote_mtime
+        to_download = [
+            name for name, (remote_hash, remote_mtime) in remote_index.items()
+            if (
+                name not in local_index or
+                local_index[name][1] < remote_mtime
             )
         ]
 
-    to_upload = [
-        m for m in local_meta
-        if (
-            m["name"] not in remote_index or
-            remote_index.get(m["name"], ("", 0))[0] != m["sha256"] or
-            remote_index.get(m["name"], ("", 0))[1] < m["mtime"]  # local is newer
-        )
-    ]
-    to_upload = [
-        m for m in to_upload
-        if not m["name"].lower().endswith('.json')
-    ]
-
-    # Ask user what to do with local-only orphan files (not on server)
-    orphans = [
-        m for m in local_meta
-        if (
-            not m["name"].lower().endswith('.json')
-            and m["name"] not in remote_index
-        )
-    ]
-    if orphans:
-        print(
-            ctext(
-                f"\nFound {len(orphans)} local files not on server.",
-                Fore.YELLOW,
+        to_upload = [
+            m for m in local_meta
+            if (
+                m["name"] not in remote_index or
+                remote_index.get(m["name"], ("", 0))[0] != m["sha256"] or
+                remote_index.get(m["name"], ("", 0))[1] < m["mtime"]  # local is newer
             )
-        )
-        print(ctext("Decide for each: upload, delete, or skip.", Fore.YELLOW))
-        for m in orphans:
-            name = m["name"]
-            while True:
-                prompt = (
-                    f"Orphan: '{name}' -> "
-                    + "[u]pload/[d]elete/[s]kip? (u/d/s): "
+        ]
+        to_upload = [
+            m for m in to_upload
+            if not m["name"].lower().endswith('.json')
+        ]
+
+        # Ask user what to do with local-only orphan files (not on server)
+        orphans = [
+            m for m in local_meta
+            if (
+                not m["name"].lower().endswith('.json')
+                and m["name"] not in remote_index
+            )
+        ]
+        if orphans:
+            print(
+                ctext(
+                    f"\nFound {len(orphans)} local files not on server.",
+                    Fore.YELLOW,
                 )
-                ans = input(prompt).strip().lower()
-                if ans in ("u", "d", "s"):
-                    break
-                print("Please answer u, d, or s.")
+            )
+            print(ctext("Decide for each: upload, delete, or skip.", Fore.YELLOW))
+            for m in orphans:
+                name = m["name"]
+                while True:
+                    prompt = (
+                        f"Orphan: '{name}' -> "
+                        + "[u]pload/[d]elete/[s]kip? (u/d/s): "
+                    )
+                    ans = input(prompt).strip().lower()
+                    if ans in ("u", "d", "s"):
+                        break
+                    print("Please answer u, d, or s.")
 
-            if ans == "u":
-                # Ensure it's in to_upload
-                if not any(x["name"] == name for x in to_upload):
-                    to_upload.append(m)
-            elif ans == "d":
-                # Ask confirmation for PDFs
-                if name.lower().endswith(".pdf"):
-                    c = input(
-                        f"Move PDF '{name}' to deleted folder? (y/n): "
-                    ).strip().lower()
-                    if c not in ("y", "yes"):
-                        print("Skipped.")
-                        continue
-                # Remove from upload list and move to deleted/
-                to_upload = [x for x in to_upload if x["name"] != name]
-                fp = os.path.join(".", name)
-                msg = f"  📁 Moving {name} to deleted folder..."
-                print(ctext(msg, Fore.YELLOW))
-                if os.path.exists(fp):
-                    if move_to_deleted(fp, DELETED_DIR):
-                        print(
-                            ctext(
-                                "  ✅ Moved (delete in 10 days)",
-                                Fore.GREEN,
+                if ans == "u":
+                    # Ensure it's in to_upload
+                    if not any(x["name"] == name for x in to_upload):
+                        to_upload.append(m)
+                elif ans == "d":
+                    # Ask confirmation for PDFs
+                    if name.lower().endswith(".pdf"):
+                        c = input(
+                            f"Move PDF '{name}' to deleted folder? (y/n): "
+                        ).strip().lower()
+                        if c not in ("y", "yes"):
+                            print("Skipped.")
+                            continue
+                    # Remove from upload list and move to deleted/
+                    to_upload = [x for x in to_upload if x["name"] != name]
+                    fp = os.path.join(".", name)
+                    msg = f"  📁 Moving {name} to deleted folder..."
+                    print(ctext(msg, Fore.YELLOW))
+                    if os.path.exists(fp):
+                        if move_to_deleted(fp, DELETED_DIR):
+                            print(
+                                ctext(
+                                    "  ✅ Moved (delete in 10 days)",
+                                    Fore.GREEN,
+                                )
                             )
-                        )
+                        else:
+                            print(ctext(f"  ❌ Failed to move {name}", Fore.RED))
                     else:
-                        print(ctext(f"  ❌ Failed to move {name}", Fore.RED))
-                else:
-                    warn = f"  ⚠️  File {name} not found locally"
-                    print(ctext(warn, Fore.YELLOW))
-            else:  # skip
-                # Ensure it won't upload
-                to_upload = [x for x in to_upload if x["name"] != name]
+                        warn = f"  ⚠️  File {name} not found locally"
+                        print(ctext(warn, Fore.YELLOW))
+                else:  # skip
+                    # Ensure it won't upload
+                    to_upload = [x for x in to_upload if x["name"] != name]
 
-    # 4. Download missing/changed
-    if to_download:
-        msg = f"\n⬇️  Downloading {len(to_download)} files..."
-        print(ctext(msg, Fore.MAGENTA))
-    for name in to_download:
-        print(ctext(f"  📥 {name}", Fore.CYAN))
-        dir_name = os.path.dirname(name)
-        if dir_name:
-            os.makedirs(dir_name, exist_ok=True)
-        dl = requests.get(f"{BASE_URL}/{name}", stream=True)
-        dl.raise_for_status()
-        with open(name, "wb") as f:
-            for chunk in dl.iter_content(4096):
-                f.write(chunk)
-        orig_mtime = remote_index[name][1]
-        os.utime(name, (orig_mtime, orig_mtime))
+        # 4. Download missing/changed
+        if to_download:
+            msg = f"\n⬇️  Downloading {len(to_download)} files..."
+            print(ctext(msg, Fore.MAGENTA))
+            for name in to_download:
+                print(ctext(f"  📥 {name}", Fore.CYAN))
+                dir_name = os.path.dirname(name)
+                if dir_name:
+                    os.makedirs(dir_name, exist_ok=True)
+                dl = requests.get(f"{BASE_URL}/{name}", stream=True)
+                dl.raise_for_status()
+                with open(name, "wb") as f:
+                    for chunk in dl.iter_content(4096):
+                        f.write(chunk)
+                orig_mtime = remote_index[name][1]
+                os.utime(name, (orig_mtime, orig_mtime))
 
-    # Important: do not delete local-only files.
-    # If a file exists locally but not on the server, treat it as a
-    # candidate for upload (two-way sync behavior).
-    # Deletions would require explicit tombstones or a force-mirror mode,
-    # which we do not implement here to avoid accidental data loss.
+        # Important: do not delete local-only files.
+        # If a file exists locally but not on the server, treat it as a
+        # candidate for upload (two-way sync behavior).
+        # Deletions would require explicit tombstones or a force-mirror mode,
+        # which we do not implement here to avoid accidental data loss.
 
-    # 5. Upload new/changed (server must implement POST /upload)
-    if to_upload:
-        print(ctext(f"\n⬆️  Uploading {len(to_upload)} files...", Fore.GREEN))
-    for m in to_upload:
-        print(ctext(f"  📤 {m['name']}", Fore.GREEN))
-        with open(m["name"], "rb") as f:
-            files = {"file": f}
-            data = {"mtime": str(m["mtime"])}
-            upl = requests.post(f"{BASE_URL}/upload", files=files, data=data)
-            upl.raise_for_status()
+        # 5. Upload new/changed (server must implement POST /upload)
+        if to_upload:
+            print(ctext(f"\n⬆️  Uploading {len(to_upload)} files...", Fore.GREEN))
+            for m in to_upload:
+                print(ctext(f"  📤 {m['name']}", Fore.GREEN))
+                with open(m["name"], "rb") as f:
+                    files = {"file": f}
+                    data = {"mtime": str(m["mtime"])}
+                    upl = requests.post(f"{BASE_URL}/upload", files=files, data=data)
+                    upl.raise_for_status()
 
-    # 6. Update local metadata
-    print(ctext("\n🎉 Sync complete! All files are up to date.", Fore.GREEN))
+        # 6. Update local metadata
+        print(ctext("\n🎉 Sync complete! All files are up to date.", Fore.GREEN))
+    finally:
+        # Always restore original working directory after sync
+        try:
+            os.chdir(orig_cwd)
+        except Exception:
+            pass
 
 if __name__ == "__main__":
     main_menu()

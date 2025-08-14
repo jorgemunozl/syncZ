@@ -39,7 +39,8 @@ def ctext(text, color=None):
 
 
 # --- Configuration ---
-CONFIG_FILE = "config.json"
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+CONFIG_FILE = os.path.join(SCRIPT_DIR, "config.json")
 DEFAULT_PATH = "/home/jorge/zoteroReference"
 DEFAULT_PORT = 8000
 
@@ -88,7 +89,6 @@ config = load_config()
 path = config.get("path", DEFAULT_PATH)
 PORT = config.get("port", DEFAULT_PORT)
 METADATA_PATH = 'file_list.json'
-os.chdir(path)
 
 class SyncHandler(http.server.SimpleHTTPRequestHandler):
     def log_message(self, format, *args):
@@ -193,6 +193,9 @@ def generate_file_list(root_dir):
             # Skip hidden files if needed
             if fname.startswith("."):
                 continue
+            # Skip JSON files
+            if fname.lower().endswith('.json'):
+                continue
             full = os.path.join(dirpath, fname)
             rows.append({
                 "name": os.path.relpath(full, root_dir).replace("\\", "/"),
@@ -200,9 +203,6 @@ def generate_file_list(root_dir):
                 "mtime": os.path.getmtime(full)
             })
     return rows
-
-PORT = 8000
-path = "/home/jorge/zoteroReference"
 
 
 def main():
