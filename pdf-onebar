@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+# Unified dmenu launcher for PDFs; supports page jump via ':12', '#12', or '-P 12'.
+# Usage: pdf-onebar [DIR]
+# Env:
+#   PDF_DIR_DEFAULT  Default directory if no DIR arg provided (falls back to $HOME/zoteroReference/)
+#   DMENU            dmenu binary (default: dmenu)
+#   DMENU_ARGS       extra args for dmenu (flags only; prompt supplied here)
+set -euo pipefail
+
+DIR="${1:-${PDF_DIR_DEFAULT:-$HOME/zoteroReference/}}"
+DMENU=${DMENU:-dmenu}
+DMENU_ARGS=${DMENU_ARGS:-"-i"}  # pass flags only; we'll supply the prompt
+
+# Collect PDF list (prefer fd/fdfind; fallback to find). Output relative paths.
+if command -v fd >/dev/null 2>&1; then
+  mapfile -t files < <(fd -i -H -t f -e pdf . "$DIR")
+elif command -v fdfind >/dev/null 2>&1; then
+  mapfile -t files < <(fdfind -i -H -t f -e pdf . "$DIR")
+else
+  mapfile -t files < <(cd "$DIR" && find . -type f -iname '*.pdf' -printf '%P\n')
+fi
+
+# Build display -> path map; show only basenames; disambiguate duplicates with parent dir
+# Initialize counts defensively for set -u
+declare -A count
+for f in "${files[@]:-}"; do
+  [[ -n "$f" ]] || continue
+  base="${f##*/}"
+  : "${count[$base]:=0}"
+  (( ++count["$base"] ))
+
+done
+
+mapfile -t lines < <(
+  for f in "${files[@]:-}"; do
+    [[ -n "$f" ]] || continue
+    base="${f##*/}"
+    # Build absolute path robustly
+    if [[ "$f" = /* ]]; then
+      abs="$f"
+    else
+      abs="$DIR/${f#./}"
+    fi
+    if (( count["$base"] > 1 )); then
+      parent="${f%/*}"; [[ "$parent" = "." || -z "$parent" ]] && parent="/"
+      printf '%s \\u2014 %s\t%s\n' "$base" "$parent" "$abs"
+    else
+      printf '%s\t%s\n' "$base" "$abs"
+    fi
+  done | sort -u
+)
+
+# If no items, exit gracefully
+if [[ ${#lines[@]} -eq 0 ]]; then
+  if command -v notify-send >/dev/null 2>&1; then
+    notify-send "No PDFs found in $DIR"
+  else
+    echo "No PDFs found in $DIR"
+  fi
+  exit 0
+fi
+
+# Present menu of display names only (dmenu prints selection or typed input)
+PROMPT='pdf (append :12 or -P 12):'
+read -r -a _DMENU_ARGS <<< "$DMENU_ARGS"
+choice=$(printf '%s\n' "${lines[@]}" | cut -f1 | "$DMENU" "${_DMENU_ARGS[@]}" -p "$PROMPT") || exit 0
+[[ -n "$choice" ]] || exit 0
+
+line="$choice"
+file_display="$line"; page=""
+# If the user appended a page suffix (when using Tab to paste), strip & parse it
+if [[ "$line" =~ (.*)[[:space:]]-P[[:space:]]*([0-9-]+)$ ]]; then
+  file_display="${BASH_REMATCH[1]}"; page="${BASH_REMATCH[2]}"
+elif [[ "$line" =~ (.*)[:#]([0-9-]+)$ ]]; then
+  file_display="${BASH_REMATCH[1]}"; page="${BASH_REMATCH[2]}"
+fi
+# rtrim trailing spaces from file_display
+file_display="${file_display%"${file_display##*[![:space:]]}"}"
+
+# Map display -> absolute path
+abs_path=$(printf '%s\n' "${lines[@]}" | awk -v sel="$file_display" -F '\t' '($1==sel){print $2; exit}') || true
+[[ -n "$abs_path" ]] || exit 1
+
+# Launch zathura (jump to page if provided)
+if [[ -n "$page" ]]; then
+  exec zathura -P "$page" "$abs_path"
+else
+  exec zathura "$abs_path"
+fi
