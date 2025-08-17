@@ -13,40 +13,26 @@ DMENU_ARGS=${DMENU_ARGS:-"-i"}  # pass flags only; we'll supply the prompt
 
 # Collect PDF list (prefer fd/fdfind; fallback to find). Output relative paths.
 if command -v fd >/dev/null 2>&1; then
-  mapfile -t files < <(fd -i -H -t f -e pdf . "$DIR")
+  mapfile -t files < <(cd "$DIR" && fd -i -H -t f -e pdf .)
 elif command -v fdfind >/dev/null 2>&1; then
-  mapfile -t files < <(fdfind -i -H -t f -e pdf . "$DIR")
+  mapfile -t files < <(cd "$DIR" && fdfind -i -H -t f -e pdf .)
 else
   mapfile -t files < <(cd "$DIR" && find . -type f -iname '*.pdf' -printf '%P\n')
 fi
 
-# Build display -> path map; show only basenames; disambiguate duplicates with parent dir
-# Initialize counts defensively for set -u
-declare -A count
-for f in "${files[@]:-}"; do
-  [[ -n "$f" ]] || continue
-  base="${f##*/}"
-  : "${count[$base]:=0}"
-  (( ++count["$base"] ))
-
-done
-
+# Build display -> path map; show full relative paths for all files
 mapfile -t lines < <(
   for f in "${files[@]:-}"; do
     [[ -n "$f" ]] || continue
-    base="${f##*/}"
     # Build absolute path robustly
     if [[ "$f" = /* ]]; then
       abs="$f"
     else
       abs="$DIR/${f#./}"
     fi
-    if (( count["$base"] > 1 )); then
-      parent="${f%/*}"; [[ "$parent" = "." || -z "$parent" ]] && parent="/"
-      printf '%s \\u2014 %s\t%s\n' "$base" "$parent" "$abs"
-    else
-      printf '%s\t%s\n' "$base" "$abs"
-    fi
+    # Clean up the relative path for display (remove leading ./)
+    display_path="${f#./}"
+    printf '%s\t%s\n' "$display_path" "$abs"
   done | sort -u
 )
 

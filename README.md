@@ -1,4 +1,4 @@
-# 🚀 SyncZ - Beautiful Cross-Device File Synchronization
+# 🚀 SyncZ - Cross-Device File Synchronization
 
 SyncZ is a modern, user-friendly file synchronization tool designed to keep files synchronized between multiple devices over a local network. With its beautiful colored interface and intelligent features, it's perfect for syncing files between desktop, laptop, and mobile devices using Termux.
 
@@ -12,6 +12,71 @@ SyncZ is a modern, user-friendly file synchronization tool designed to keep file
 - ⚙️ **Easy Configuration**: Interactive configuration management with beautiful displays
 - 🌐 **Unified Interface**: Single entry point with multiple operation modes
 - 🖥️ **Server Detection**: Graceful handling of server connectivity issues
+- 📄 **PDF Search Bar**: Fast PDF launcher with keyboard shortcuts and full path display
+
+## 📄 PDF Search Bar
+
+SyncZ includes a powerful PDF search and launch system that integrates seamlessly with your desktop environment.
+
+### ✨ Features
+- **🔍 Fast Search**: Instantly find PDFs by name or path using dmenu
+- **📁 Full Path Display**: Shows complete directory structure (e.g., `research/papers/document.pdf`)
+- **⌨️ Keyboard Shortcuts**: Quick access via Super+Shift+P (GNOME) or $mod+Shift+P (i3)
+- **🎯 Smart Opening**: Opens PDFs with Zathura with optional page jumping
+- **📂 Directory Support**: Recursively searches subdirectories
+- **🚀 Auto-Installation**: One-command setup for your environment
+
+### 🛠️ Installation
+
+```bash
+# Run the unified installer (auto-detects your environment)
+./install-pdf-launcher.sh
+```
+
+The installer will:
+- **Detect your environment** (GNOME/Ubuntu vs i3/Arch)
+- **Install dependencies** (dmenu, zathura, fd-find/fd, xdg-utils)
+- **Set up keyboard shortcuts** for your desktop environment
+- **Configure PDF associations** (sets Zathura as default PDF viewer)
+
+### 🎮 Usage
+
+1. **Keyboard Shortcut**: Press `Super+Shift+P` (GNOME) or `$mod+Shift+P` (i3)
+2. **Search Interface**: Type to filter PDFs by name or path
+3. **Open PDF**: Press Enter to open with Zathura
+4. **Page Jumping**: Append `:12`, `#12`, or `-P 12` to jump to specific pages
+
+### 📋 Example
+
+```
+Your PDF directory structure:
+📁 ~/zoteroReference/
+├── 📄 important.pdf
+├── 📁 research/
+│   ├── 📄 paper1.pdf
+│   └── 📄 paper2.pdf
+└── 📁 books/
+    └── 📁 technical/
+        └── 📄 manual.pdf
+
+Search bar shows:
+- important.pdf
+- research/paper1.pdf  
+- research/paper2.pdf
+- books/technical/manual.pdf
+```
+
+### ⚙️ Configuration
+
+The PDF search bar uses your sync directory by default (`~/zoteroReference/`), but you can customize it:
+
+```bash
+# Set custom PDF directory
+export PDF_DIR_DEFAULT="/path/to/your/pdfs"
+
+# Use different dmenu arguments
+export DMENU_ARGS="-i -l 10 -fn 'Ubuntu Mono-12'"
+```
 
 ## 🎮 How to Use SyncZ
 
@@ -24,6 +89,9 @@ cd syncZ
 
 # Run SyncZ (handles setup automatically)
 bash syncz_setup.sh
+
+# Optional: Install PDF search bar (requires dmenu + zathura)
+./install-pdf-launcher.sh
 ```
 
 ### 💻 Command Options
@@ -185,6 +253,7 @@ python3 syncz
 - **Zotero Libraries**: Sync research papers and references
 - **BibTeX Files**: Keep `.bib` files synchronized for LaTeX
 - **Research Notes**: Sync markdown files and documentation
+- **PDF Search**: Use the integrated search bar for instant PDF access
 
 ### 💼 Development
 - **Code Projects**: Sync between development environments  

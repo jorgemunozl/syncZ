@@ -30,10 +30,10 @@ except ImportError:
         CYAN = ""
         WHITE = ""
         RESET = ""
-    
+
     class Style:
         RESET_ALL = ""
-    
+
     COLOR_ENABLED = False
 
 
@@ -48,10 +48,10 @@ def clean_old_deleted_files(deleted_dir="deleted", days=10):
     """Remove files from deleted directory that are older than specified days"""
     if not os.path.exists(deleted_dir):
         return
-    
+
     cutoff_date = datetime.now() - timedelta(days=days)
     deleted_count = 0
-    
+
     for root, dirs, files in os.walk(deleted_dir):
         for file in files:
             if file == ".deleted_info.json":
@@ -70,7 +70,7 @@ def clean_old_deleted_files(deleted_dir="deleted", days=10):
                     ))
             except Exception as e:
                 print(ctext(f"  ⚠️  Could not delete {file_path}: {e}", Fore.RED))
-    
+
     if deleted_count > 0:
         print(ctext(
             f"🧹 Cleaned up {deleted_count} files older than {days} days",
@@ -82,16 +82,16 @@ def move_to_deleted(file_path, deleted_dir="deleted"):
     """Move a file to the deleted directory instead of permanently deleting it"""
     if not os.path.exists(deleted_dir):
         os.makedirs(deleted_dir)
-    
+
     filename = os.path.basename(file_path)
     deleted_path = os.path.join(deleted_dir, filename)
-    
+
     # If file already exists in deleted, add timestamp
     if os.path.exists(deleted_path):
         name, ext = os.path.splitext(filename)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         deleted_path = os.path.join(deleted_dir, f"{name}_{timestamp}{ext}")
-    
+
     try:
         shutil.move(file_path, deleted_path)
         return True
@@ -109,7 +109,7 @@ def generate_file_list(root_dir):
         # Skip the deleted directory and its subdirectories
         if "deleted" in os.path.relpath(dirpath, root_dir).split(os.sep):
             continue
-            
+
         for fname in filenames:
             # Skip hidden files if needed
             if fname.startswith("."):
@@ -486,10 +486,10 @@ def do_sync():
     # Note: we intentionally do not define LOCAL_JSON or a download dir here,
     # as we no longer perform local deletions based on server state.
     DELETED_DIR = "deleted"
-    
+
     # Clean up old deleted files first
     clean_old_deleted_files(DELETED_DIR, days=10)
-    
+
     orig_cwd = os.getcwd()
     try:
         try:

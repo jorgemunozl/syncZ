@@ -19,10 +19,12 @@ def get_local_ip():
     except Exception:
         return "127.0.0.1"
 
+
 def get_ethernet_ip():
     """Get the Ethernet IP address of this machine (if available)."""
     try:
-        import fcntl, struct
+        import fcntl
+        import struct
         iface = 'eth0'
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         return socket.inet_ntoa(fcntl.ioctl(
@@ -33,65 +35,68 @@ def get_ethernet_ip():
     except Exception:
         return get_local_ip()
 
+
 def update_client_config(server_ip, sync_path):
     """Update client.py with new configuration."""
     try:
         with open("client.py", "r") as f:
             content = f.read()
-        
+
         # Update SERVER_IP
         content = content.replace(
             'SERVER_IP   = "192.168.43.119"',
             f'SERVER_IP   = "{server_ip}"'
         )
-        
+
         # Update path
         content = content.replace(
             'path="/root/shared/zoteroReference"',
             f'path="{sync_path}"'
         )
-        
+
         with open("client.py", "w") as f:
             f.write(content)
-        
+
         print(f"✅ Updated client.py with SERVER_IP: {server_ip} and path: {sync_path}")
         return True
     except Exception as e:
         print(f"❌ Error updating client.py: {e}")
         return False
 
+
 def update_server_config(sync_path, port=8000):
     """Update run_server.py with new configuration."""
     try:
         with open("run_server.py", "r") as f:
             content = f.read()
-        
+
         # Update path
         content = content.replace(
             'path = "/home/jorge/zoteroReference"',
             f'path = "{sync_path}"'
         )
-        
+
         # Update PORT if different
         if port != 8000:
             content = content.replace(
                 'PORT = 8000',
                 f'PORT = {port}'
             )
-        
+
         with open("run_server.py", "w") as f:
             f.write(content)
-        
+
         print(f"✅ Updated run_server.py with path: {sync_path} and port: {port}")
         return True
     except Exception as e:
         print(f"❌ Error updating run_server.py: {e}")
         return False
 
+
 def main():
     print("🔧 SyncZ Configuration Helper")
     print("=" * 40)
-    
+
     print("\n🌐 Network Type Selection:")
     print("1. LAN (WiFi/Local Network)")
     print("2. Ethernet (Wired)")
@@ -138,7 +143,7 @@ def main():
                 print("Invalid port, using 8000")
                 port = 8000
         if update_server_config(server_path, port):
-            print(f"\n🚀 Server ready! Run: python run_server.py")
+            print("\n🚀 Server ready! Run: python run_server.py")
             print(f"📡 Server will be available at: http://{local_ip}:{port}")
 
     if choice in ["2", "3"]:
@@ -154,12 +159,13 @@ def main():
                 return
         client_path = get_path("Enter local sync directory path for client")
         if update_client_config(server_ip, client_path):
-            print(f"\n🔄 Client ready! Run: python client.py")
+            print("\n🔄 Client ready! Run: python client.py")
 
     print("\n✨ Configuration complete!")
     print("\n📝 Quick Start:")
     print("1. On server device: python run_server.py")
     print("2. On client device: python client.py")
+
 
 if __name__ == "__main__":
     main()

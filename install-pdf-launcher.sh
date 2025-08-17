@@ -56,7 +56,7 @@ choice="${choice:-$detected_env}" # Default to detected if user just hits Enter
 
 install_packages_gnome() {
     echo "▶ Installing packages for GNOME (apt)..."
-    sudo apt update
+    
     sudo apt install -y dmenu fd-find zathura zathura-pdf-poppler xdg-utils
     # fd-find installs the binary as 'fdfind'; create a convenient 'fd' shim if missing
     if ! command -v fd >/dev/null 2>&1 && command -v fdfind >/dev/null 2>&1; then
