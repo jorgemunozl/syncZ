@@ -145,22 +145,40 @@ setup_keybinding_i3() {
     local key_combo='bindsym $mod+Shift+p exec --no-startup-id'
 
     local i3_config=""
-    if [[ -f "$i3_cfg_main" ]]; then i3_config="$i3_cfg_main"; fi
-    if [[ -z "$i3_config" && -f "$i3_cfg_fallback" ]]; then i3_config="$i3_cfg_fallback"; fi
+    if [[ -f "$i3_cfg_main" ]]; then 
+        i3_config="$i3_cfg_main"
+    elif [[ -f "$i3_cfg_fallback" ]]; then 
+        i3_config="$i3_cfg_fallback"
+    fi
     
     if [[ -z "$i3_config" ]]; then
-        echo "WARNING: No i3 config found. You will need to add the keybinding manually."
+        echo "❌ WARNING: No i3 config found at:"
+        echo "   - $i3_cfg_main"
+        echo "   - $i3_cfg_fallback"
+        echo ""
+        echo "💡 Manual setup required. Add this line to your i3 config:"
+        echo "   bindsym \$mod+Shift+p exec --no-startup-id \"$LAUNCHER_SCRIPT_PATH\" \"$PDF_DIR_DEFAULT\""
+        echo ""
+        echo "   Then reload i3: \$mod+Shift+r"
         return
     fi
 
+    echo "📄 Found i3 config: $i3_config"
+    
     if ! grep -q "pdf-onebar" "$i3_config" 2>/dev/null; then
+        echo "➕ Adding keybinding to i3 config..."
         printf "\n# %s\n%s %q %q\n" "$LAUNCHER_CMD_NAME" "$key_combo" "$LAUNCHER_SCRIPT_PATH" "$PDF_DIR_DEFAULT" >> "$i3_config"
-        echo "✅ i3 binding added to $i3_config. Reload i3 to apply (\$mod+Shift+r)."
+        echo "✅ i3 binding added to $i3_config"
+        echo "🔄 Reloading i3 configuration..."
         if command -v i3-msg >/dev/null 2>&1; then
-            i3-msg -q reload || true
+            i3-msg -q reload || echo "⚠️  i3-msg reload failed, manually reload with \$mod+Shift+r"
+        else
+            echo "💡 Reload i3 manually with \$mod+Shift+r"
         fi
     else
-        echo "✅ i3 binding already exists."
+        echo "✅ i3 binding already exists in config."
+        echo "🔍 Current binding:"
+        grep -A1 -B1 "pdf-onebar" "$i3_config"
     fi
 }
 
