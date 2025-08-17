@@ -36,6 +36,7 @@ except ImportError:
     
     COLOR_ENABLED = False
 
+
 def ctext(text, color=None):
     """Apply color to text if colorama is available"""
     if COLOR_ENABLED and color:
@@ -62,12 +63,19 @@ def clean_old_deleted_files(deleted_dir="deleted", days=10):
                 if file_mtime < cutoff_date:
                     os.remove(file_path)
                     deleted_count += 1
-                    print(ctext(f"  🗑️  Permanently deleted old file: {os.path.relpath(file_path, deleted_dir)}", Fore.YELLOW))
+                    rel = os.path.relpath(file_path, deleted_dir)
+                    print(ctext(
+                        f"  🗑️  Permanently deleted old file: {rel}",
+                        Fore.YELLOW,
+                    ))
             except Exception as e:
                 print(ctext(f"  ⚠️  Could not delete {file_path}: {e}", Fore.RED))
     
     if deleted_count > 0:
-        print(ctext(f"🧹 Cleaned up {deleted_count} files older than {days} days", Fore.GREEN))
+        print(ctext(
+            f"🧹 Cleaned up {deleted_count} files older than {days} days",
+            Fore.GREEN,
+        ))
 
 
 def move_to_deleted(file_path, deleted_dir="deleted"):
@@ -88,8 +96,12 @@ def move_to_deleted(file_path, deleted_dir="deleted"):
         shutil.move(file_path, deleted_path)
         return True
     except Exception as e:
-        print(ctext(f"  ❌ Failed to move {file_path} to deleted folder: {e}", Fore.RED))
+        print(ctext(
+            f"  ❌ Failed to move {file_path} to deleted folder: {e}",
+            Fore.RED,
+        ))
         return False
+
 
 def generate_file_list(root_dir):
     rows = []
@@ -121,6 +133,7 @@ DEFAULT_PATH = "/root/shared/zoteroReference"
 DEFAULT_SERVER_IP = "192.168.43.119"
 DEFAULT_SERVER_PORT = 8000
 
+
 def load_config():
     if os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE, "r", encoding="utf-8") as f:
@@ -131,6 +144,7 @@ def load_config():
         "server_ip": DEFAULT_SERVER_IP,
         "server_port": DEFAULT_SERVER_PORT
     }
+
 
 def get_primary_ip():
     """Return the primary local IPv4 address used for outbound connections."""
@@ -149,6 +163,7 @@ def get_primary_ip():
             return socket.gethostbyname(socket.gethostname())
         except Exception:
             return "127.0.0.1"
+
 
 def show_current_config():
     config = load_config()
@@ -175,6 +190,7 @@ def show_current_config():
     )
     print(ctext("=" * 50, Fore.CYAN))
 
+
 def sha256sum(path):
     h = hashlib.sha256()
     with open(path, "rb") as f:
@@ -182,13 +198,17 @@ def sha256sum(path):
             h.update(chunk)
     return h.hexdigest()
 
+
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 NARROW_EMOJI = {"🖥", "⚙"}
+
 
 def strip_ansi(s: str) -> str:
     return ANSI_RE.sub("", s)
 
 # Fallback emoji detection (used only if wcwidth is unavailable)
+
+
 def _is_emoji(ch: str) -> bool:
     cp = ord(ch)
     return (
@@ -200,6 +220,7 @@ def _is_emoji(ch: str) -> bool:
         0x2600 <= cp <= 0x26FF or
         0x2700 <= cp <= 0x27BF
     )
+
 
 def _char_width(ch: str) -> int:
     # Handle zero-width characters explicitly in fallback path
@@ -221,6 +242,7 @@ def _char_width(ch: str) -> int:
     if eaw in ("F", "W"):
         return 2
     return 1
+
 
 def _count_narrow_emoji_clusters(s: str) -> int:
     count = 0
@@ -250,6 +272,7 @@ def visible_width(s: str) -> int:
         return max(w, 0)
     return sum(_char_width(ch) for ch in s2)
 
+
 def _truncate_to_width(text: str, width: int) -> str:
     total = 0
     out = []
@@ -261,6 +284,7 @@ def _truncate_to_width(text: str, width: int) -> str:
         total += w
     return "".join(out)
 
+
 def line_content(text: str, width: int, align: str = "left") -> str:
     text = _truncate_to_width(text, width)
     w = visible_width(text)
@@ -271,14 +295,18 @@ def line_content(text: str, width: int, align: str = "left") -> str:
         return " " * left + text + " " * right
     return text + " " * pad
 
+
 def box_top(width: int) -> str:
     return ctext("╔" + "═" * width + "╗", Fore.CYAN)
+
 
 def box_sep(width: int) -> str:
     return ctext("╠" + "═" * width + "╣", Fore.CYAN)
 
+
 def box_bottom(width: int) -> str:
     return ctext("╚" + "═" * width + "╝", Fore.CYAN)
+
 
 def box_line(text: str, width: int, content_color=Fore.WHITE, align: str = "left") -> str:
     return (
@@ -286,6 +314,7 @@ def box_line(text: str, width: int, content_color=Fore.WHITE, align: str = "left
         + ctext(line_content(text, width, align=align), content_color)
         + ctext("║", Fore.CYAN)
     )
+
 
 def delete_orphan_locals():
     """Mirror server: move local-only files into deleted/ safely."""
@@ -370,6 +399,7 @@ def delete_orphan_locals():
         except Exception:
             pass
 
+
 def main_menu():
     show_current_config()
     width = 48
@@ -406,6 +436,7 @@ def main_menu():
             sys.exit(0)
         else:
             print(ctext("❌ Invalid option. Please try again.", Fore.RED))
+
 
 def change_config():
     config = load_config()
