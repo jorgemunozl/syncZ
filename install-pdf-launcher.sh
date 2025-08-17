@@ -57,6 +57,25 @@ choice="${choice:-$detected_env}" # Default to detected if user just hits Enter
 install_packages_gnome() {
     echo "▶ Installing packages for GNOME (apt)..."
     
+    # Handle zathura PDF backend conflicts
+    echo "▶ Checking for zathura PDF backend conflicts..."
+    if dpkg -l | grep -q zathura-pdf-mupdf; then
+        echo "⚠️  Found zathura-pdf-mupdf installed."
+        echo "   zathura-pdf-mupdf and zathura-pdf-poppler conflict with each other."
+        echo "   We recommend poppler for better compatibility."
+        read -rp "   Remove zathura-pdf-mupdf and install poppler? [Y/n]: " remove_mupdf
+        remove_mupdf="${remove_mupdf:-Y}"
+        
+        if [[ "$remove_mupdf" =~ ^[Yy]$ ]]; then
+            sudo apt remove -y zathura-pdf-mupdf
+        else
+            echo "   Keeping zathura-pdf-mupdf. Skipping poppler installation."
+            sudo apt install -y dmenu fd-find zathura xdg-utils
+            echo "   NOTE: PDF functionality may be limited with mupdf backend."
+            return
+        fi
+    fi
+    
     sudo apt install -y dmenu fd-find zathura zathura-pdf-poppler xdg-utils
     # fd-find installs the binary as 'fdfind'; create a convenient 'fd' shim if missing
     if ! command -v fd >/dev/null 2>&1 && command -v fdfind >/dev/null 2>&1; then
@@ -72,6 +91,26 @@ install_packages_gnome() {
 
 install_packages_i3() {
     echo "▶ Installing packages for i3 (pacman)..."
+    
+    # Handle zathura PDF backend conflicts for Arch
+    echo "▶ Checking for zathura PDF backend conflicts..."
+    if pacman -Qq zathura-pdf-mupdf >/dev/null 2>&1; then
+        echo "⚠️  Found zathura-pdf-mupdf installed."
+        echo "   zathura-pdf-mupdf and zathura-pdf-poppler conflict with each other."
+        echo "   We recommend poppler for better compatibility."
+        read -rp "   Remove zathura-pdf-mupdf and install poppler? [Y/n]: " remove_mupdf
+        remove_mupdf="${remove_mupdf:-Y}"
+        
+        if [[ "$remove_mupdf" =~ ^[Yy]$ ]]; then
+            sudo pacman -R --noconfirm zathura-pdf-mupdf
+        else
+            echo "   Keeping zathura-pdf-mupdf. Skipping poppler installation."
+            sudo pacman -S --needed --noconfirm dmenu fd zathura xdg-utils
+            echo "   NOTE: PDF functionality may be limited with mupdf backend."
+            return
+        fi
+    fi
+    
     sudo pacman -S --needed --noconfirm dmenu fd zathura zathura-pdf-poppler xdg-utils
 }
 
