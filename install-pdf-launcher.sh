@@ -37,7 +37,7 @@ packages and set up the right keyboard shortcut.
     - Packages: dmenu, fd-find, zathura, xdg-utils
 
 (2) i3 (Arch-based)
-    - Shortcut: $mod+Shift+P
+    - Shortcut: Alt+Shift+P (Mod1+Shift+P)
     - Packages: dmenu, fd, zathura, xdg-utils
 
 EOF
@@ -142,7 +142,7 @@ setup_keybinding_i3() {
     echo "▶ Setting up i3 keybinding..."
     local i3_cfg_main="$HOME/.config/i3/config"
     local i3_cfg_fallback="$HOME/.i3/config"
-    local key_combo='bindsym $mod+Shift+p exec --no-startup-id'
+    local key_combo='bindsym Mod1+Shift+p exec --no-startup-id'
 
     local i3_config=""
     if [[ -f "$i3_cfg_main" ]]; then 
@@ -157,7 +157,7 @@ setup_keybinding_i3() {
         echo "   - $i3_cfg_fallback"
         echo ""
         echo "💡 Manual setup required. Add this line to your i3 config:"
-        echo "   bindsym \$mod+Shift+p exec --no-startup-id \"$LAUNCHER_SCRIPT_PATH\" \"$PDF_DIR_DEFAULT\""
+        echo "   bindsym Mod1+Shift+p exec --no-startup-id \"$LAUNCHER_SCRIPT_PATH\" \"$PDF_DIR_DEFAULT\""
         echo ""
         echo "   Then reload i3: \$mod+Shift+r"
         return
@@ -168,7 +168,7 @@ setup_keybinding_i3() {
     if ! grep -q "pdf-onebar" "$i3_config" 2>/dev/null; then
         echo "➕ Adding keybinding to i3 config..."
         printf "\n# %s\n%s %q %q\n" "$LAUNCHER_CMD_NAME" "$key_combo" "$LAUNCHER_SCRIPT_PATH" "$PDF_DIR_DEFAULT" >> "$i3_config"
-        echo "✅ i3 binding added to $i3_config"
+        echo "✅ i3 binding added to $i3_config (Alt+Shift+P)"
         echo "🔄 Reloading i3 configuration..."
         if command -v i3-msg >/dev/null 2>&1; then
             i3-msg -q reload || echo "⚠️  i3-msg reload failed, manually reload with \$mod+Shift+r"

@@ -199,6 +199,28 @@ def sha256sum(path):
     return h.hexdigest()
 
 
+def request_metadata_regeneration(base_url):
+    """Request the server to regenerate its metadata file"""
+    try:
+        print(ctext("🔄 Requesting server to regenerate metadata...", Fore.YELLOW))
+        response = requests.post(f"{base_url}/regenerate-metadata", timeout=10)
+        response.raise_for_status()
+        
+        result = response.json()
+        if result.get("status") == "success":
+            print(ctext(f"✅ Server regenerated metadata: {result.get('message')}", Fore.GREEN))
+            return True
+        else:
+            print(ctext(f"⚠️  Server response: {result.get('message')}", Fore.YELLOW))
+            return False
+    except requests.exceptions.RequestException as e:
+        print(ctext(f"⚠️  Could not request metadata regeneration: {e}", Fore.YELLOW))
+        return False
+    except Exception as e:
+        print(ctext(f"⚠️  Error requesting metadata regeneration: {e}", Fore.YELLOW))
+        return False
+
+
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 NARROW_EMOJI = {"🖥", "⚙"}
 
@@ -646,12 +668,17 @@ def do_sync():
 
         # 6. Update local metadata
         print(ctext("\n🎉 Sync complete! All files are up to date.", Fore.GREEN))
+        
+        # 7. Request server to regenerate metadata if any files were uploaded or downloaded
+        if to_upload or to_download:
+            request_metadata_regeneration(BASE_URL)
     finally:
         # Always restore original working directory after sync
         try:
             os.chdir(orig_cwd)
         except Exception:
             pass
+
 
 if __name__ == "__main__":
     main_menu()

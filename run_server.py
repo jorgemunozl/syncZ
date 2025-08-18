@@ -120,7 +120,34 @@ class SyncHandler(http.server.SimpleHTTPRequestHandler):
             super().do_GET()
 
     def do_POST(self):
-        if self.path == '/upload':
+        if self.path == '/regenerate-metadata':
+            try:
+                print(ctext("\n🔄 Client requested metadata regeneration...", Fore.YELLOW))
+                data = generate_file_list(os.getcwd())
+                with open("file_list.json", "w", encoding="utf-8") as f:
+                    json.dump(data, f, indent=2)
+                
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                response = {
+                    "status": "success",
+                    "message": f"Metadata regenerated with {len(data)} files",
+                    "file_count": len(data)
+                }
+                self.wfile.write(json.dumps(response).encode())
+                print(ctext(f"✅ Regenerated metadata with {len(data)} files", Fore.GREEN))
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                response = {
+                    "status": "error",
+                    "message": f"Failed to regenerate metadata: {str(e)}"
+                }
+                self.wfile.write(json.dumps(response).encode())
+                print(ctext(f"❌ Failed to regenerate metadata: {e}", Fore.RED))
+        elif self.path == '/upload':
             content_length = int(self.headers.get('Content-Length', 0))
             content_type = self.headers.get('Content-Type', '')
             if not content_type.startswith('multipart/form-data'):
