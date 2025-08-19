@@ -568,6 +568,27 @@ def do_sync():
             m for m in to_upload
             if not m["name"].lower().endswith('.json')
         ]
+        
+        # Debug: Show detailed upload reasons
+        if to_upload:
+            print(ctext(f"\n🔍 DEBUG: Files marked for upload:", Fore.YELLOW))
+            for m in to_upload:
+                name = m["name"]
+                local_hash = m["sha256"]
+                local_mtime = m["mtime"]
+                
+                if name in remote_index:
+                    remote_hash, remote_mtime = remote_index[name]
+                    hash_diff = local_hash != remote_hash
+                    time_diff = local_mtime > remote_mtime
+                    
+                    print(ctext(f"  📄 {name}:", Fore.CYAN))
+                    print(ctext(f"    Reason: {'Hash differs' if hash_diff else ''} {'Local newer' if time_diff else ''}", Fore.CYAN))
+                    print(ctext(f"    Local:  {local_hash[:12]}... @ {local_mtime}", Fore.CYAN))
+                    print(ctext(f"    Remote: {remote_hash[:12]}... @ {remote_mtime}", Fore.CYAN))
+                    print(ctext(f"    Time diff: {local_mtime - remote_mtime:.6f}s", Fore.CYAN))
+                else:
+                    print(ctext(f"  📄 {name}: New file (not on server)", Fore.CYAN))
 
         # Ask user what to do with local-only orphan files (not on server)
         orphans = [
@@ -610,8 +631,11 @@ def do_sync():
                         if c not in ("y", "yes"):
                             print("Skipped.")
                             continue
-                    # Remove from upload list and move to deleted/
+                    
+                    # Remove from upload list FIRST to prevent any uploads
                     to_upload = [x for x in to_upload if x["name"] != name]
+                    
+                    # Move file to deleted folder
                     fp = os.path.join(".", name)
                     msg = f"  📁 Moving {name} to deleted folder..."
                     print(ctext(msg, Fore.YELLOW))
@@ -631,6 +655,12 @@ def do_sync():
                 else:  # skip
                     # Ensure it won't upload
                     to_upload = [x for x in to_upload if x["name"] != name]
+
+        # Debug: Show final upload list after processing orphans
+        if to_upload:
+            print(ctext(f"\n📋 Final upload queue: {len(to_upload)} files", Fore.CYAN))
+            for m in to_upload:
+                print(ctext(f"  • {m['name']}", Fore.CYAN))
 
         # 4. Download missing/changed
         if to_download:
@@ -659,6 +689,11 @@ def do_sync():
         if to_upload:
             print(ctext(f"\n⬆️  Uploading {len(to_upload)} files...", Fore.GREEN))
             for m in to_upload:
+                # Skip files that no longer exist (e.g., moved to deleted folder)
+                if not os.path.exists(m["name"]):
+                    print(ctext(f"  ⏭️  Skipping {m['name']} (file not found)", Fore.YELLOW))
+                    continue
+                    
                 print(ctext(f"  📤 {m['name']}", Fore.GREEN))
                 with open(m["name"], "rb") as f:
                     files = {"file": f}
