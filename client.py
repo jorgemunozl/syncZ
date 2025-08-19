@@ -221,6 +221,62 @@ def request_metadata_regeneration(base_url):
         return False
 
 
+# --- Progress helpers -------------------------------------------------
+# Progress helpers
+def _format_size(n):
+    for unit in ('B', 'KB', 'MB', 'GB', 'TB'):
+        if n < 1024.0:
+            return f"{n:3.1f}{unit}"
+        n /= 1024.0
+    return f"{n:.1f}PB"
+
+
+def print_progress(name, transferred, total):
+    total = int(total) if total else 0
+    if total > 0:
+        pct = transferred / total
+        bar_len = 30
+        filled = int(pct * bar_len)
+        bar = "█" * filled + "-" * (bar_len - filled)
+        left = ctext("  " + name, Fore.CYAN)
+        stats = f"{pct*100:6.2f}% |{bar}| {_format_size(transferred)}/{_format_size(total)}"
+        sys.stdout.write(f"\r{left} {stats}")
+    else:
+        # Unknown total size
+        left = ctext("  " + name, Fore.CYAN)
+        sys.stdout.write(f"\r{left} {_format_size(transferred)} transferred")
+    sys.stdout.flush()
+
+
+class UploadFileWithProgress:
+    """File-like wrapper used for streaming uploads with progress reporting."""
+    def __init__(self, path, callback=None, chunk_size=4096):
+        self.path = path
+        self.f = open(path, 'rb')
+        self.callback = callback
+        self.total = os.path.getsize(path)
+        self.transferred = 0
+        self.chunk_size = chunk_size
+
+    def read(self, amt=None):
+        data = self.f.read(self.chunk_size if amt is None else amt)
+        if not data:
+            return b""
+        self.transferred += len(data)
+        if self.callback:
+            self.callback(self.path, self.transferred, self.total)
+        return data
+
+    def __len__(self):
+        return self.total
+
+    def close(self):
+        try:
+            self.f.close()
+        except Exception:
+            pass
+
+
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 NARROW_EMOJI = {"🖥", "⚙"}
 
@@ -571,19 +627,24 @@ def do_sync():
         
         # Debug: Show detailed upload reasons
         if to_upload:
-            print(ctext(f"\n🔍 DEBUG: Files marked for upload:", Fore.YELLOW))
+            print(ctext("\n🔍 DEBUG: Files marked for upload:", Fore.YELLOW))
             for m in to_upload:
                 name = m["name"]
                 local_hash = m["sha256"]
                 local_mtime = m["mtime"]
-                
+
                 if name in remote_index:
                     remote_hash, remote_mtime = remote_index[name]
                     hash_diff = local_hash != remote_hash
                     time_diff = local_mtime > remote_mtime
-                    
+
                     print(ctext(f"  📄 {name}:", Fore.CYAN))
-                    print(ctext(f"    Reason: {'Hash differs' if hash_diff else ''} {'Local newer' if time_diff else ''}", Fore.CYAN))
+                    reason_parts = []
+                    if hash_diff:
+                        reason_parts.append('Hash differs')
+                    if time_diff:
+                        reason_parts.append('Local newer')
+                    print(ctext(f"    Reason: {', '.join(reason_parts)}", Fore.CYAN))
                     print(ctext(f"    Local:  {local_hash[:12]}... @ {local_mtime}", Fore.CYAN))
                     print(ctext(f"    Remote: {remote_hash[:12]}... @ {remote_mtime}", Fore.CYAN))
                     print(ctext(f"    Time diff: {local_mtime - remote_mtime:.6f}s", Fore.CYAN))
@@ -673,9 +734,17 @@ def do_sync():
                     os.makedirs(dir_name, exist_ok=True)
                 dl = requests.get(f"{BASE_URL}/{name}", stream=True)
                 dl.raise_for_status()
+                total = int(dl.headers.get("Content-Length", 0) or 0)
+                transferred = 0
                 with open(name, "wb") as f:
                     for chunk in dl.iter_content(4096):
+                        if not chunk:
+                            continue
                         f.write(chunk)
+                        transferred += len(chunk)
+                        print_progress(name, transferred, total)
+                # Ensure final progress line ends and print a newline
+                sys.stdout.write("\n")
                 orig_mtime = remote_index[name][1]
                 os.utime(name, (orig_mtime, orig_mtime))
 
@@ -695,11 +764,22 @@ def do_sync():
                     continue
                     
                 print(ctext(f"  📤 {m['name']}", Fore.GREEN))
-                with open(m["name"], "rb") as f:
-                    files = {"file": f}
+                wrapper = UploadFileWithProgress(
+                    m["name"],
+                    callback=lambda p, t, tot: print_progress(m["name"], t, tot),
+                )
+                try:
+                    files = {"file": (os.path.basename(m["name"]), wrapper)}
                     data = {"mtime": str(m["mtime"])}
                     upl = requests.post(f"{BASE_URL}/upload", files=files, data=data)
                     upl.raise_for_status()
+                    # Ensure progress prints complete
+                    sys.stdout.write("\n")
+                finally:
+                    try:
+                        wrapper.close()
+                    except Exception:
+                        pass
 
         # 6. Update local metadata
         print(ctext("\n🎉 Sync complete! All files are up to date.", Fore.GREEN))
