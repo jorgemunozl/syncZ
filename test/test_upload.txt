@@ -1,5 +1,0 @@
-This is a test file for testing Rich progress bars during upload.
-It contains multiple lines to make it large enough to see the progress.
-Line 3 with some content.
-Line 4 with more content.
-Line 5 with even more content.
