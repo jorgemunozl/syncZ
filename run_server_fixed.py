@@ -3,7 +3,9 @@ import hashlib
 import os
 import json
 import socketserver
+import cgi
 from datetime import datetime
+from urllib.parse import parse_qs
 
 # Try to import colorama for colored output
 try:
@@ -41,7 +43,6 @@ CONFIG_FILE = os.path.join(SCRIPT_DIR, "config.json")
 DEFAULT_PATH = "/home/jorge/zoteroReference"
 DEFAULT_PORT = 8000
 
-
 def load_config():
     if os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE, "r", encoding="utf-8") as f:
@@ -50,7 +51,6 @@ def load_config():
         "path": DEFAULT_PATH,
         "port": DEFAULT_PORT
     }
-
 
 def get_primary_ip():
     try:
@@ -89,55 +89,6 @@ path = config.get("path", DEFAULT_PATH)
 PORT = config.get("port", DEFAULT_PORT)
 METADATA_PATH = 'file_list.json'
 
-
-def parse_multipart_form_data(boundary, body):
-    """Simple multipart/form-data parser"""
-    parts = {}
-    
-    boundary_bytes = b'--' + boundary
-    sections = body.split(boundary_bytes)
-    
-    for section in sections[1:-1]:  # Skip first empty and last boundary parts
-        if not section.strip():
-            continue
-            
-        # Find the headers/body separator
-        header_end = section.find(b'\r\n\r\n')
-        if header_end == -1:
-            continue
-            
-        headers = section[2:header_end].decode('utf-8', errors='ignore')  # Skip leading \r\n
-        content = section[header_end + 4:]  # Skip \r\n\r\n
-        
-        # Remove trailing \r\n if present
-        if content.endswith(b'\r\n'):
-            content = content[:-2]
-        
-        # Parse Content-Disposition header
-        for line in headers.split('\r\n'):
-            if line.lower().startswith('content-disposition:'):
-                # Extract name from form-data
-                if 'name="' in line:
-                    start = line.find('name="') + 6
-                    end = line.find('"', start)
-                    if end != -1:
-                        field_name = line[start:end]
-                        
-                        # Check if it's a file field
-                        if 'filename="' in line:
-                            # Extract filename
-                            fname_start = line.find('filename="') + 10
-                            fname_end = line.find('"', fname_start)
-                            filename = line[fname_start:fname_end] if fname_end != -1 else 'unknown'
-                            parts[field_name] = {'type': 'file', 'content': content, 'filename': filename}
-                        else:
-                            # Regular form field
-                            parts[field_name] = {'type': 'field', 'content': content.decode('utf-8', errors='ignore')}
-                break
-    
-    return parts
-
-
 class SyncHandler(http.server.SimpleHTTPRequestHandler):
     def log_message(self, format, *args):
         """Override to add colored logging"""
@@ -170,8 +121,8 @@ class SyncHandler(http.server.SimpleHTTPRequestHandler):
     def do_POST(self):
         print(ctext(f"🔄 Received POST request for {self.path}", Fore.MAGENTA))
         
-        try:
-            if self.path == '/regenerate-metadata':
+        if self.path == '/regenerate-metadata':
+            try:
                 print(ctext("🔄 Client requested metadata regeneration...", Fore.YELLOW))
                 data = generate_file_list(os.getcwd())
                 with open("file_list.json", "w", encoding="utf-8") as f:
@@ -187,69 +138,58 @@ class SyncHandler(http.server.SimpleHTTPRequestHandler):
                 }
                 self.wfile.write(json.dumps(response).encode())
                 print(ctext(f"✅ Regenerated metadata with {len(data)} files", Fore.GREEN))
+            except Exception as e:
+                print(ctext(f"❌ Failed to regenerate metadata: {e}", Fore.RED))
+                self.send_response(500)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                response = {
+                    "status": "error",
+                    "message": f"Failed to regenerate metadata: {str(e)}"
+                }
+                self.wfile.write(json.dumps(response).encode())
                 
-            elif self.path == '/upload':
+        elif self.path == '/upload':
+            try:
                 print(ctext("📤 Processing file upload...", Fore.CYAN))
                 
-                # Get content type and boundary
-                content_type = self.headers.get('Content-Type', '')
-                content_length = int(self.headers.get('Content-Length', 0))
+                # Use cgi.FieldStorage for robust multipart parsing
+                form = cgi.FieldStorage(
+                    fp=self.rfile,
+                    headers=self.headers,
+                    environ={
+                        'REQUEST_METHOD': 'POST',
+                        'CONTENT_TYPE': self.headers['Content-Type'],
+                    }
+                )
                 
-                print(ctext(f"📋 Content-Type: {content_type}", Fore.BLUE))
-                print(ctext(f"📏 Content-Length: {content_length}", Fore.BLUE))
+                print(ctext(f"📋 Form fields: {list(form.keys())}", Fore.BLUE))
                 
-                if not content_type.startswith('multipart/form-data'):
-                    self.send_error(400, "Expected multipart/form-data")
-                    return
-                
-                # Extract boundary
-                boundary_start = content_type.find('boundary=')
-                if boundary_start == -1:
-                    self.send_error(400, "No boundary found in Content-Type")
-                    return
-                
-                boundary = content_type[boundary_start + 9:].strip().encode()
-                print(ctext(f"🔗 Boundary: {boundary.decode()}", Fore.BLUE))
-                
-                # Read the request body
-                body = self.rfile.read(content_length)
-                print(ctext(f"📦 Read {len(body)} bytes", Fore.BLUE))
-                
-                # Parse multipart data
-                parts = parse_multipart_form_data(boundary, body)
-                print(ctext(f"📂 Found parts: {list(parts.keys())}", Fore.BLUE))
-                
-                # Validate required fields
-                if 'file' not in parts:
+                # Extract file
+                if 'file' not in form:
                     self.send_error(400, "No file field in upload")
                     print(ctext("❌ No file field found", Fore.RED))
                     return
-                
-                file_part = parts['file']
-                if file_part['type'] != 'file':
-                    self.send_error(400, "File field is not a file")
-                    print(ctext("❌ File field is not a file", Fore.RED))
+                    
+                fileitem = form['file']
+                if not fileitem.filename:
+                    self.send_error(400, "No filename provided")
+                    print(ctext("❌ No filename provided", Fore.RED))
                     return
                 
-                filename = file_part['filename']
-                file_content = file_part['content']
-                
-                print(ctext(f"📄 Filename: {filename}", Fore.GREEN))
-                print(ctext(f"💾 File size: {len(file_content)} bytes", Fore.GREEN))
-                
-                # Get optional fields
+                # Extract metadata
                 mtime = 0
                 relpath = None
                 
-                if 'mtime' in parts and parts['mtime']['type'] == 'field':
+                if 'mtime' in form:
                     try:
-                        mtime = float(parts['mtime']['content'])
+                        mtime = float(form['mtime'].value)
                         print(ctext(f"📅 MTime: {mtime}", Fore.BLUE))
-                    except ValueError:
+                    except (ValueError, AttributeError):
                         print(ctext("⚠️  Invalid mtime, using 0", Fore.YELLOW))
                 
-                if 'relpath' in parts and parts['relpath']['type'] == 'field':
-                    relpath = parts['relpath']['content']
+                if 'relpath' in form:
+                    relpath = form['relpath'].value
                     print(ctext(f"📁 Relative path: {relpath}", Fore.BLUE))
                 
                 # Determine file path
@@ -259,16 +199,25 @@ class SyncHandler(http.server.SimpleHTTPRequestHandler):
                     filepath = os.path.join(path, relpath)
                     # Create directory if needed
                     os.makedirs(os.path.dirname(filepath), exist_ok=True)
-                    final_filename = relpath
+                    filename = relpath
                 else:
-                    final_filename = filename
+                    filename = fileitem.filename
                     filepath = os.path.join(path, filename)
                 
                 print(ctext(f"💾 Saving to: {filepath}", Fore.YELLOW))
                 
                 # Write file
                 with open(filepath, 'wb') as f:
-                    f.write(file_content)
+                    if hasattr(fileitem, 'file'):
+                        # fileitem.file is the actual file object
+                        while True:
+                            chunk = fileitem.file.read(8192)
+                            if not chunk:
+                                break
+                            f.write(chunk)
+                    else:
+                        # Fallback: write the value directly
+                        f.write(fileitem.value)
                 
                 # Set modification time
                 if mtime > 0:
@@ -276,7 +225,7 @@ class SyncHandler(http.server.SimpleHTTPRequestHandler):
                     print(ctext(f"🕒 Set mtime to {mtime}", Fore.BLUE))
                 
                 file_size = os.path.getsize(filepath)
-                print(ctext(f"✅ Upload successful: {final_filename} ({file_size} bytes)", Fore.GREEN))
+                print(ctext(f"✅ Upload successful: {filename} ({file_size} bytes)", Fore.GREEN))
                 
                 # Send success response
                 self.send_response(200)
@@ -284,22 +233,21 @@ class SyncHandler(http.server.SimpleHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(b'Upload successful')
                 
-            else:
-                self.send_error(404, "POST path not supported")
-                print(ctext(f"❌ Unsupported POST path: {self.path}", Fore.RED))
+            except Exception as e:
+                print(ctext(f"❌ Upload failed: {e}", Fore.RED))
+                import traceback
+                traceback.print_exc()
                 
-        except Exception as e:
-            print(ctext(f"❌ Error processing request: {e}", Fore.RED))
-            import traceback
-            traceback.print_exc()
-            
-            try:
-                self.send_response(500)
-                self.send_header('Content-Type', 'text/plain')
-                self.end_headers()
-                self.wfile.write(f"Server error: {str(e)}".encode())
-            except:
-                print(ctext("❌ Failed to send error response", Fore.RED))
+                try:
+                    self.send_response(500)
+                    self.send_header('Content-Type', 'text/plain')
+                    self.end_headers()
+                    self.wfile.write(f"Upload failed: {str(e)}".encode())
+                except:
+                    pass  # Connection might be broken
+        else:
+            self.send_error(404, "POST path not supported")
+            print(ctext(f"❌ Unsupported POST path: {self.path}", Fore.RED))
 
 
 def sha256sum(path):
@@ -334,7 +282,7 @@ def generate_file_list(root_dir):
 
 
 def main():
-    print(ctext("\n🚀 Starting SyncZ Server (Simple Version)...", Fore.GREEN))
+    print(ctext("\n🚀 Starting SyncZ Server (Fixed Version)...", Fore.GREEN))
     show_server_config()
     
     try:
