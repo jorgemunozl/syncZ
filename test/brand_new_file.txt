@@ -1,0 +1,5 @@
+This is a brand new file for testing the -cu auto-upload functionality.
+It should trigger the auto-upload behavior when detected as an orphan.
+More content here to make it substantial.
+Testing the automatic upload feature of SyncZ.
+Final line of the test file.

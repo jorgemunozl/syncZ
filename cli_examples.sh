@@ -1,0 +1,28 @@
+#!/bin/bash
+# SyncZ Command Line Examples
+# This file demonstrates the new CLI functionality
+
+echo "🚀 SyncZ Command Line Interface Examples"
+echo "========================================="
+echo ""
+echo "📖 Basic Usage:"
+echo "  syncz -c         # Interactive sync (ask for each orphan)"
+echo "  syncz -cu        # Auto-upload all orphaned files"
+echo "  syncz -cd        # Auto-delete all orphaned files"
+echo ""
+echo "⚙️  Configuration:"
+echo "  syncz --config   # Show/change configuration"
+echo "  syncz --server   # Start server"
+echo "  syncz --push     # Push mode (delete local orphans)"
+echo ""
+echo "❌ Error cases:"
+echo "  syncz -cud       # Error: Cannot use both upload and delete"
+echo ""
+echo "💡 Similar to YOLO commands:"
+echo "  Instead of: yolo detect predict.py"
+echo "  You have:   syncz -cu (auto-upload)"
+echo "             syncz -cd (auto-delete)"
+echo ""
+echo "🔧 To create an alias, add this to your ~/.bashrc:"
+echo "  alias syncz='cd /path/to/syncZ && python client.py'"
+echo ""

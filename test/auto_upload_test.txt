@@ -1,0 +1,5 @@
+This is a test file for testing the auto-upload flag functionality.
+It should be automatically uploaded when using syncz -cu flag.
+Line 3 with content.
+Line 4 with more content.
+Final line.

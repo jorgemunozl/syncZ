@@ -5,6 +5,7 @@ import requests
 import sys
 import time
 import shutil
+import argparse
 from datetime import datetime, timedelta
 import re
 import unicodedata
@@ -525,7 +526,7 @@ def start_server():
         print(ctext("\n🛑 Server stopped by user.", Fore.YELLOW))
 
 
-def do_sync():
+def do_sync(auto_upload=False, auto_delete=False):
     config = load_config()
     path = config.get("path", DEFAULT_PATH)
     SERVER_IP = config.get("server_ip", DEFAULT_SERVER_IP)
@@ -637,33 +638,17 @@ def do_sync():
                     Fore.YELLOW,
                 )
             )
-            print(ctext("Decide for each: upload, delete, or skip.", Fore.YELLOW))
-            for m in orphans:
-                name = m["name"]
-                while True:
-                    prompt = (
-                        f"Orphan: '{name}' -> "
-                        + "[u]pload/[d]elete/[s]kip? (u/d/s): "
-                    )
-                    ans = input(prompt).strip().lower()
-                    if ans in ("u", "d", "s"):
-                        break
-                    print("Please answer u, d, or s.")
-
-                if ans == "u":
-                    # Ensure it's in to_upload
-                    if not any(x["name"] == name for x in to_upload):
+            
+            if auto_upload:
+                print(ctext("🤖 Auto-upload mode: uploading all orphaned files...", Fore.CYAN))
+                for m in orphans:
+                    if not any(x["name"] == m["name"] for x in to_upload):
                         to_upload.append(m)
-                elif ans == "d":
-                    # Ask confirmation for PDFs
-                    if name.lower().endswith(".pdf"):
-                        c = input(
-                            f"Move PDF '{name}' to deleted folder? (y/n): "
-                        ).strip().lower()
-                        if c not in ("y", "yes"):
-                            print("Skipped.")
-                            continue
-                    
+                        print(ctext(f"  ⬆️  Queued for upload: {m['name']}", Fore.GREEN))
+            elif auto_delete:
+                print(ctext("🤖 Auto-delete mode: moving all orphaned files to deleted folder...", Fore.CYAN))
+                for m in orphans:
+                    name = m["name"]
                     # Remove from upload list FIRST to prevent any uploads
                     to_upload = [x for x in to_upload if x["name"] != name]
                     
@@ -684,9 +669,57 @@ def do_sync():
                     else:
                         warn = f"  ⚠️  File {name} not found locally"
                         print(ctext(warn, Fore.YELLOW))
-                else:  # skip
-                    # Ensure it won't upload
-                    to_upload = [x for x in to_upload if x["name"] != name]
+            else:
+                print(ctext("Decide for each: upload, delete, or skip.", Fore.YELLOW))
+                for m in orphans:
+                    name = m["name"]
+                    while True:
+                        prompt = (
+                            f"Orphan: '{name}' -> "
+                            + "[u]pload/[d]elete/[s]kip? (u/d/s): "
+                        )
+                        ans = input(prompt).strip().lower()
+                        if ans in ("u", "d", "s"):
+                            break
+                        print("Please answer u, d, or s.")
+
+                    if ans == "u":
+                        # Ensure it's in to_upload
+                        if not any(x["name"] == name for x in to_upload):
+                            to_upload.append(m)
+                    elif ans == "d":
+                        # Ask confirmation for PDFs
+                        if name.lower().endswith(".pdf"):
+                            c = input(
+                                f"Move PDF '{name}' to deleted folder? (y/n): "
+                            ).strip().lower()
+                            if c not in ("y", "yes"):
+                                print("Skipped.")
+                                continue
+                        
+                        # Remove from upload list FIRST to prevent any uploads
+                        to_upload = [x for x in to_upload if x["name"] != name]
+                        
+                        # Move file to deleted folder
+                        fp = os.path.join(".", name)
+                        msg = f"  📁 Moving {name} to deleted folder..."
+                        print(ctext(msg, Fore.YELLOW))
+                        if os.path.exists(fp):
+                            if move_to_deleted(fp, DELETED_DIR):
+                                print(
+                                    ctext(
+                                        "  ✅ Moved (delete in 10 days)",
+                                        Fore.GREEN,
+                                    )
+                                )
+                            else:
+                                print(ctext(f"  ❌ Failed to move {name}", Fore.RED))
+                        else:
+                            warn = f"  ⚠️  File {name} not found locally"
+                            print(ctext(warn, Fore.YELLOW))
+                    else:  # skip
+                        # Ensure it won't upload
+                        to_upload = [x for x in to_upload if x["name"] != name]
 
         # Debug: Show final upload list after processing orphans
         if to_upload:
@@ -771,5 +804,75 @@ def do_sync():
             pass
 
 
+def parse_arguments():
+    """Parse command-line arguments"""
+    parser = argparse.ArgumentParser(
+        description="SyncZ - File synchronization tool",
+        prog="syncz"
+    )
+    
+    # Main action flags
+    parser.add_argument('-c', '--sync', action='store_true',
+                        help='Run sync operation')
+    parser.add_argument('-u', '--upload', action='store_true',
+                        help='Auto-upload orphaned files (use with -c)')
+    parser.add_argument('-d', '--delete', action='store_true',
+                        help='Auto-delete orphaned files (use with -c)')
+    
+    # Configuration flags
+    parser.add_argument('--config', action='store_true',
+                        help='Show configuration menu')
+    parser.add_argument('--server', action='store_true',
+                        help='Start server')
+    parser.add_argument('--push', action='store_true',
+                        help='Push mode (delete local orphans)')
+    
+    return parser.parse_args()
+
+
+def main():
+    """Main entry point that handles both CLI and interactive modes"""
+    args = parse_arguments()
+    
+    # Handle command-line interface
+    if len(sys.argv) > 1:
+        if args.sync:
+            # Validate conflicting flags
+            if args.upload and args.delete:
+                print(ctext("❌ Error: Cannot use both --upload and --delete flags together", Fore.RED))
+                sys.exit(1)
+            
+            # Display mode information
+            if args.upload:
+                print(ctext("🤖 SyncZ Auto-Upload Mode (-cu)", Fore.CYAN))
+                print(ctext("   All orphaned files will be automatically uploaded", Fore.CYAN))
+            elif args.delete:
+                print(ctext("🤖 SyncZ Auto-Delete Mode (-cd)", Fore.CYAN))
+                print(ctext("   All orphaned files will be automatically moved to deleted folder", Fore.CYAN))
+            else:
+                print(ctext("🔄 SyncZ Interactive Sync Mode", Fore.CYAN))
+            
+            # Run sync with appropriate flags
+            do_sync(auto_upload=args.upload, auto_delete=args.delete)
+            
+        elif args.config:
+            show_current_config()
+            change_config()
+            show_current_config()
+            
+        elif args.server:
+            start_server()
+            
+        elif args.push:
+            delete_orphan_locals()
+            
+        else:
+            # Show help if no valid action specified
+            parse_arguments().print_help()
+    else:
+        # No arguments provided, run interactive mode
+        main_menu()
+
+
 if __name__ == "__main__":
-    main_menu()
+    main()
