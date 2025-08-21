@@ -248,6 +248,43 @@ def print_progress(name, transferred, total):
     sys.stdout.flush()
 
 
+class UploadFileWithProgress:
+    """
+    File-like wrapper for streaming uploads with progress reporting.
+    This is a working implementation that properly handles file streaming.
+    """
+    def __init__(self, path, callback=None):
+        self.path = path
+        self._file = open(path, 'rb')
+        self.callback = callback
+        self.total_size = os.path.getsize(path)
+        self.bytes_read = 0
+        
+    def read(self, size=-1):
+        """Read data from the file and report progress"""
+        data = self._file.read(size)
+        if data:
+            self.bytes_read += len(data)
+            if self.callback:
+                self.callback(self.path, self.bytes_read, self.total_size)
+        return data
+        
+    def __len__(self):
+        """Return the total file size"""
+        return self.total_size
+        
+    def close(self):
+        """Close the underlying file"""
+        if hasattr(self, '_file') and self._file:
+            self._file.close()
+            
+    def __enter__(self):
+        return self
+        
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
+
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 NARROW_EMOJI = {"🖥", "⚙"}
 
@@ -736,24 +773,49 @@ def do_sync():
                     
                 print(ctext(f"  📤 {m['name']}", Fore.GREEN))
                 
+                # Define progress callback
+                def progress_callback(filepath, transferred, total):
+                    percent = (transferred / total) * 100 if total > 0 else 0
+                    bar_length = 30
+                    filled_length = int(bar_length * transferred // total) if total > 0 else 0
+                    bar = '█' * filled_length + '░' * (bar_length - filled_length)
+                    
+                    # Format sizes
+                    def format_size(bytes_val):
+                        for unit in ['B', 'KB', 'MB', 'GB']:
+                            if bytes_val < 1024.0:
+                                return f"{bytes_val:.1f}{unit}"
+                            bytes_val /= 1024.0
+                        return f"{bytes_val:.1f}TB"
+                    
+                    size_str = f"{format_size(transferred)}/{format_size(total)}"
+                    print(f"\r    📊 [{bar}] {percent:.1f}% {size_str}", end="", flush=True)
+                
                 try:
-                    with open(m["name"], "rb") as f:
-                        files = {"file": f}
+                    # Use progress wrapper for upload
+                    with UploadFileWithProgress(m["name"], callback=progress_callback) as file_wrapper:
+                        files = {"file": (os.path.basename(m["name"]), file_wrapper)}
                         data = {"mtime": str(m["mtime"])}
                         upl = requests.post(f"{BASE_URL}/upload", files=files, data=data, timeout=60)
                         upl.raise_for_status()
+                    
+                    print()  # New line after progress bar
                     print(ctext("    ✅ Uploaded successfully", Fore.GREEN))
                     
                 except requests.exceptions.Timeout:
+                    print()  # New line after progress bar
                     print(ctext(f"    ⏰ Upload timeout for {m['name']}", Fore.RED))
                     continue
                 except requests.exceptions.ConnectionError:
+                    print()  # New line after progress bar
                     print(ctext(f"    🔌 Connection error for {m['name']}", Fore.RED))
                     continue
                 except requests.exceptions.RequestException as e:
+                    print()  # New line after progress bar
                     print(ctext(f"    ❌ Request error for {m['name']}: {e}", Fore.RED))
                     continue
                 except Exception as e:
+                    print()  # New line after progress bar
                     print(ctext(f"    ❌ Unexpected error for {m['name']}: {e}", Fore.RED))
                     continue
 
