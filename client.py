@@ -270,6 +270,14 @@ class UploadFileWithProgress:
             self.callback(self.path, self.transferred, self.total)
         return data
 
+    def readline(self, amt=-1):
+        """Support readline for compatibility"""
+        return self.f.readline(amt)
+
+    def readlines(self, hint=-1):
+        """Support readlines for compatibility"""
+        return self.f.readlines(hint)
+
     def __len__(self):
         return self.total
 
@@ -284,11 +292,29 @@ class UploadFileWithProgress:
         """Return current position"""
         return self.f.tell()
 
+    def fileno(self):
+        """Return file descriptor for compatibility"""
+        return self.f.fileno()
+
+    def readable(self):
+        """Return True if file is readable"""
+        return True
+
+    def seekable(self):
+        """Return True if file is seekable"""
+        return True
+
     def close(self):
         try:
             self.f.close()
         except Exception:
             pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
 
 
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
@@ -785,17 +811,43 @@ def do_sync():
                 def upload_progress_callback(path, transferred, total):
                     print_progress(filename, transferred, total)
                 
-                wrapper = UploadFileWithProgress(
-                    m["name"],
-                    callback=upload_progress_callback,
-                )
                 try:
+                    print(ctext(f"    🔧 Creating upload wrapper for {filename}...", Fore.CYAN))
+                    wrapper = UploadFileWithProgress(
+                        m["name"],
+                        callback=upload_progress_callback,
+                    )
+                    
+                    print(ctext(f"    📏 File size: {len(wrapper)} bytes", Fore.CYAN))
+                    
                     files = {"file": wrapper}
                     data = {"mtime": str(m["mtime"])}
-                    upl = requests.post(f"{BASE_URL}/upload", files=files, data=data)
+                    
+                    print(ctext(f"    🌐 Sending POST request to {BASE_URL}/upload...", Fore.CYAN))
+                    upl = requests.post(f"{BASE_URL}/upload", files=files, data=data, timeout=60)
+                    
+                    print(ctext(f"    📊 Response status: {upl.status_code}", Fore.CYAN))
+                    
                     upl.raise_for_status()
+                    print(ctext("    ✅ Upload successful!", Fore.GREEN))
+                    
                     # Ensure progress prints complete
                     sys.stdout.write("\n")
+                    
+                except requests.exceptions.Timeout:
+                    print(ctext(f"    ⏰ Upload timeout for {filename}", Fore.RED))
+                    continue
+                except requests.exceptions.ConnectionError:
+                    print(ctext(f"    🔌 Connection error for {filename}", Fore.RED))
+                    continue
+                except requests.exceptions.RequestException as e:
+                    print(ctext(f"    ❌ Request error for {filename}: {e}", Fore.RED))
+                    continue
+                except Exception as e:
+                    print(ctext(f"    ❌ Unexpected error for {filename}: {e}", Fore.RED))
+                    import traceback
+                    traceback.print_exc()
+                    continue
                 finally:
                     try:
                         wrapper.close()

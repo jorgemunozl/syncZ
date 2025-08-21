@@ -1,6 +1,5 @@
 {
-  "path": "/home/jorge/zoteroReference",
-  "server_ip": "192.168.18.13",
-  "server_port": 8000,
-  "port": 8000
+  "path": ".",
+  "server_ip": "localhost",
+  "server_port": 8000
 }
