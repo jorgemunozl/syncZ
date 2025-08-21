@@ -8,6 +8,10 @@ import shutil
 from datetime import datetime, timedelta
 import re
 import unicodedata
+from rich.progress import Progress, BarColumn, TimeRemainingColumn, TransferSpeedColumn
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+from requests_toolbelt.multipart.encoder import MultipartEncoder, MultipartEncoderMonitor
 try:
     from wcwidth import wcwidth as _wcwidth, wcswidth as _wcswidth
 except Exception:
@@ -101,6 +105,78 @@ def move_to_deleted(file_path, deleted_dir="deleted"):
             Fore.RED,
         ))
         return False
+
+
+def make_session():
+    """Create a requests session with retry configuration"""
+    session = requests.Session()
+    
+    # Create a retry strategy
+    retry_strategy = Retry(
+        total=3,
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=["HEAD", "GET", "OPTIONS", "POST"],
+        backoff_factor=1
+    )
+    
+    # Create an adapter with the retry strategy
+    adapter = HTTPAdapter(max_retries=retry_strategy)
+    
+    # Mount the adapter to the session
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    
+    return session
+
+
+def upload_with_rich(session, file_path, upload_url, server_config, mtime=None):
+    """Upload a file with Rich progress bar"""
+    try:
+        with open(file_path, 'rb') as f:
+            # Create the multipart encoder with file and mtime
+            fields = {'file': (os.path.basename(file_path), f, 'application/octet-stream')}
+            if mtime:
+                fields['mtime'] = str(mtime)
+                
+            encoder = MultipartEncoder(fields=fields)
+            
+            # Create progress bar
+            progress = Progress(
+                "[progress.description]{task.description}",
+                BarColumn(),
+                "[progress.percentage]{task.percentage:>3.0f}%",
+                "•",
+                "[progress.filesize]{task.completed}/{task.total}",
+                "•",
+                TransferSpeedColumn(),
+                "•",
+                TimeRemainingColumn(),
+            )
+            
+            with progress:
+                task_id = progress.add_task(
+                    f"Uploading {os.path.basename(file_path)}",
+                    total=encoder.len
+                )
+                
+                def update_progress(monitor):
+                    progress.update(task_id, completed=monitor.bytes_read)
+                
+                # Create monitor to track progress
+                monitor = MultipartEncoderMonitor(encoder, update_progress)
+                
+                # Upload the file
+                response = session.post(
+                    upload_url,
+                    data=monitor,
+                    headers={'Content-Type': monitor.content_type},
+                    timeout=300
+                )
+                
+                return response
+    except Exception as e:
+        print(ctext(f"  ❌ Upload failed: {e}", Fore.RED))
+        return None
 
 
 def generate_file_list(root_dir):
@@ -765,6 +841,10 @@ def do_sync():
         # 5. Upload new/changed (server must implement POST /upload)
         if to_upload:
             print(ctext(f"\n⬆️  Uploading {len(to_upload)} files...", Fore.GREEN))
+            
+            # Create session with retry configuration
+            session = make_session()
+            
             for m in to_upload:
                 # Skip files that no longer exist (e.g., moved to deleted folder)
                 if not os.path.exists(m["name"]):
@@ -773,37 +853,18 @@ def do_sync():
                     
                 print(ctext(f"  📤 {m['name']}", Fore.GREEN))
                 
-                # Define progress callback
-                def progress_callback(filepath, transferred, total):
-                    percent = (transferred / total) * 100 if total > 0 else 0
-                    bar_length = 30
-                    filled_length = int(bar_length * transferred // total) if total > 0 else 0
-                    bar = '█' * filled_length + '░' * (bar_length - filled_length)
-                    
-                    # Format sizes
-                    def format_size(bytes_val):
-                        for unit in ['B', 'KB', 'MB', 'GB']:
-                            if bytes_val < 1024.0:
-                                return f"{bytes_val:.1f}{unit}"
-                            bytes_val /= 1024.0
-                        return f"{bytes_val:.1f}TB"
-                    
-                    size_str = f"{format_size(transferred)}/{format_size(total)}"
-                    print(f"\r    📊 [{bar}] {percent:.1f}% {size_str}", end="", flush=True)
-                
                 try:
-                    # Use progress wrapper for upload
-                    with UploadFileWithProgress(m["name"], callback=progress_callback) as file_wrapper:
-                        files = {"file": (os.path.basename(m["name"]), file_wrapper)}
-                        data = {"mtime": str(m["mtime"])}
-                        upl = requests.post(f"{BASE_URL}/upload", files=files, data=data, timeout=60)
-                        upl.raise_for_status()
+                    # Use Rich progress bar for upload
+                    response = upload_with_rich(session, m["name"], f"{BASE_URL}/upload", config, m["mtime"])
                     
-                    print()  # New line after progress bar
-                    print(ctext("    ✅ Uploaded successfully", Fore.GREEN))
+                    if response and response.status_code == 200:
+                        print(ctext("    ✅ Uploaded successfully", Fore.GREEN))
+                    else:
+                        status = response.status_code if response else 'No response'
+                        print(ctext(f"    ❌ Upload failed with status: {status}", Fore.RED))
                     
                 except requests.exceptions.Timeout:
-                    print()  # New line after progress bar
+                    print(ctext("    ⏰ Upload timed out", Fore.YELLOW))
                     print(ctext(f"    ⏰ Upload timeout for {m['name']}", Fore.RED))
                     continue
                 except requests.exceptions.ConnectionError:

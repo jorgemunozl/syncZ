@@ -1,0 +1,10 @@
+This is a new test file created specifically to test the Rich progress bar upload functionality.
+It needs to be long enough to actually see the progress bar in action.
+Here are some more lines to make it bigger:
+Line 4 with some content to increase file size
+Line 5 with more text and data
+Line 6 continuing to add content
+Line 7 with even more text to make this file larger
+Line 8 adding more content for testing purposes
+Line 9 with additional text content
+Line 10 final line to complete the test file
