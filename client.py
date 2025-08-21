@@ -257,9 +257,12 @@ class UploadFileWithProgress:
         self.total = os.path.getsize(path)
         self.transferred = 0
         self.chunk_size = chunk_size
+        self.name = os.path.basename(path)  # Add name attribute for requests
 
     def read(self, amt=None):
-        data = self.f.read(self.chunk_size if amt is None else amt)
+        if amt is None:
+            amt = self.chunk_size
+        data = self.f.read(amt)
         if not data:
             return b""
         self.transferred += len(data)
@@ -269,6 +272,17 @@ class UploadFileWithProgress:
 
     def __len__(self):
         return self.total
+
+    def seek(self, offset, whence=0):
+        """Allow seeking in the file"""
+        result = self.f.seek(offset, whence)
+        if whence == 0:  # SEEK_SET
+            self.transferred = offset
+        return result
+
+    def tell(self):
+        """Return current position"""
+        return self.f.tell()
 
     def close(self):
         try:
@@ -764,12 +778,19 @@ def do_sync():
                     continue
                     
                 print(ctext(f"  📤 {m['name']}", Fore.GREEN))
+                
+                # Create a proper callback closure that captures the filename
+                filename = m["name"]
+                
+                def upload_progress_callback(path, transferred, total):
+                    print_progress(filename, transferred, total)
+                
                 wrapper = UploadFileWithProgress(
                     m["name"],
-                    callback=lambda p, t, tot: print_progress(m["name"], t, tot),
+                    callback=upload_progress_callback,
                 )
                 try:
-                    files = {"file": (os.path.basename(m["name"]), wrapper)}
+                    files = {"file": wrapper}
                     data = {"mtime": str(m["mtime"])}
                     upl = requests.post(f"{BASE_URL}/upload", files=files, data=data)
                     upl.raise_for_status()
