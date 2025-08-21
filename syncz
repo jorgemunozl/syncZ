@@ -1,88 +1,76 @@
 #!/usr/bin/env python3
+"""
+SyncZ CLI Wrapper
+Provides the syncz command-line interface for easy access to SyncZ functionality.
+"""
 import sys
 import os
 
-# Support: syncz -c   => python client.py (unified menu)
-#         syncz -s   => python run_server.py (with beautiful interface)
-#         syncz      => python client.py (default to unified menu)
-#         (or print usage for invalid flags)
-
-SCRIPT_ROOT = os.path.dirname(os.path.abspath(__file__))
+# Get the directory where this script is located
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+CLIENT_PATH = os.path.join(SCRIPT_DIR, "client.py")
+VENV_PYTHON = os.path.join(SCRIPT_DIR, ".venv", "bin", "python")
 
 
-def setup_environment():
-    """Setup virtual environment and dependencies if needed"""
-    env_path = os.path.join(SCRIPT_ROOT, '.env')
-    if os.path.exists(os.path.join(env_path, 'bin', 'activate')):
-        # Set environment variables that would be set by sourcing activate
-        os.environ['VIRTUAL_ENV'] = env_path
-        path_prefix = os.path.join(env_path, 'bin')
-        os.environ['PATH'] = path_prefix + ':' + os.environ.get('PATH', '')
-        # Use the virtual environment's python
-        python_exe = os.path.join(env_path, 'bin', 'python')
-        
-        # Quick dependency check
-        try:
-            import subprocess
-            result = subprocess.run([
-                python_exe, '-c', 'import requests, colorama'
-            ], capture_output=True, text=True)
-            if result.returncode != 0:
-                print("⚠️  Dependencies missing. Please run: "
-                      "bash syncz_setup.sh")
-                sys.exit(1)
-        except Exception:
-            print("⚠️  Environment setup incomplete. Please run: "
-                  "bash syncz_setup.sh")
-            sys.exit(1)
-            
-        return python_exe
-    else:
-        print("⚠️  Virtual environment not found. Please run: "
-              "bash syncz_setup.sh")
-        sys.exit(1)
+def get_python_command():
+    """Get the appropriate Python command to use"""
+    # Try to use virtual environment Python first
+    if os.path.exists(VENV_PYTHON):
+        return VENV_PYTHON
+    
+    # Fallback to system Python
+    import subprocess
+    
+    # Try python3 first (most common)
+    try:
+        subprocess.run(["python3", "--version"], check=True, capture_output=True)
+        return "python3"
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        pass
+    
+    # Try python command
+    try:
+        subprocess.run(["python", "--version"], check=True, capture_output=True)
+        return "python"
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        pass
+    
+    # Last resort: try full path on Termux
+    termux_python = "/data/data/com.termux/files/usr/bin/python"
+    if os.path.exists(termux_python):
+        return termux_python
+    
+    print("❌ Error: Python not found. Please install Python 3.")
+    print(f"   Tried virtual env: {VENV_PYTHON}")
+    print("   Tried: python3, python")
+    sys.exit(1)
 
-usage = """
-Usage:
-    syncz          # run unified SyncZ interface (default)
-    syncz -c       # run unified SyncZ interface (client menu)
-    syncz -s       # run SyncZ server (beautiful interface)
-"""
 
 def main():
-    python_exe = setup_environment()
+    """Main entry point for syncz command"""
+    if not os.path.exists(CLIENT_PATH):
+        print(f"❌ Error: client.py not found at {CLIENT_PATH}")
+        print("📁 Contents of script directory:")
+        try:
+            for item in os.listdir(SCRIPT_DIR):
+                print(f"   - {item}")
+        except Exception as e:
+            print(f"   Error listing directory: {e}")
+        sys.exit(1)
     
-    # Change to the script directory to ensure relative paths work
-    original_cwd = os.getcwd()
-    os.chdir(SCRIPT_ROOT)
+    # Get Python command
+    python_cmd = get_python_command()
+    
+    # Build command to execute - use os.execv for direct execution
+    args = [python_cmd, CLIENT_PATH] + sys.argv[1:]
     
     try:
-        # Handle different argument patterns
-        if len(sys.argv) == 1:
-            # No arguments: default to unified interface
-            script = os.path.join(SCRIPT_ROOT, 'client.py')
-            os.execv(python_exe, [python_exe, script])
-            
-        elif len(sys.argv) == 2:
-            flag = sys.argv[1]
-            if flag == '-c':
-                # Client: use unified interface
-                script = os.path.join(SCRIPT_ROOT, 'client.py')
-                os.execv(python_exe, [python_exe, script])
-            elif flag == '-s':
-                # Server: use beautiful server interface
-                script = os.path.join(SCRIPT_ROOT, 'run_server.py')
-                os.execv(python_exe, [python_exe, script])
-            else:
-                print(usage)
-                sys.exit(1)
-        else:
-            print(usage)
-            sys.exit(1)
+        # Change to script directory and execute
+        os.chdir(SCRIPT_DIR)
+        os.execv(python_cmd, args)
     except Exception as e:
-        # Restore original directory if something goes wrong
-        os.chdir(original_cwd)
-        raise e
+        print(f"❌ Error executing syncz: {e}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

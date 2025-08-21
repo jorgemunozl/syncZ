@@ -1,5 +1,0 @@
-This file is for testing the auto-delete (-cd) functionality.
-It will be created as an orphan and should be automatically deleted.
-This tests the automated deletion behavior of SyncZ.
-Multiple lines to make it substantial.
-Testing deletion feature.
