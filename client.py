@@ -563,6 +563,181 @@ def delete_orphan_locals():
             pass
 
 
+def preview_sync():
+    """Preview files to be uploaded, downloaded, deleted without sync"""
+    config = load_config()
+    path = config.get("path", DEFAULT_PATH)
+    SERVER_IP = config.get("server_ip", DEFAULT_SERVER_IP)
+    SERVER_PORT = config.get("server_port", DEFAULT_SERVER_PORT)
+    BASE_URL = f"http://{SERVER_IP}:{SERVER_PORT}"
+    METADATA_URL = f"{BASE_URL}/metadata"
+
+    orig_cwd = os.getcwd()
+    try:
+        try:
+            os.chdir(path)
+        except Exception as e:
+            msg = f"Failed to change to sync path {path}: {e}"
+            print(ctext(msg, Fore.RED))
+            return
+
+        # 1. Fetch remote metadata
+        msg = "\n🔍 Fetching remote metadata for preview..."
+        print(ctext(msg, Fore.BLUE))
+        try:
+            resp = requests.get(METADATA_URL, timeout=5)
+            resp.raise_for_status()
+            remote_meta = resp.json()
+            print(ctext("✅ Remote metadata fetched successfully",
+                        Fore.GREEN))
+        except requests.exceptions.RequestException as e:
+            msg = f"\n❌ Could not connect to server at {SERVER_IP}:{SERVER_PORT}."
+            print(ctext(msg, Fore.RED))
+            print(ctext(f"Error: {e}\n⬅️  Returning to main menu.",
+                        Fore.RED))
+            time.sleep(2)
+            return
+
+        # 2. Compute local metadata
+        local_meta = generate_file_list(path)
+
+        remote_index = {
+            m["name"]: (m["sha256"], m.get("mtime", 0))
+            for m in remote_meta
+            if not m["name"].lower().endswith('.json')
+        }
+        local_index = {
+            m["name"]: (m["sha256"], m.get("mtime", 0))
+            for m in local_meta
+            if not m["name"].lower().endswith('.json')
+        }
+
+        # 3. Calculate what would be downloaded
+        to_download = [
+            name for name, (remote_hash, remote_mtime) in remote_index.items()
+            if (
+                name not in local_index or
+                local_index[name][1] < remote_mtime
+            )
+        ]
+
+        # 4. Calculate what would be uploaded
+        to_upload = [
+            m for m in local_meta
+            if (
+                m["name"] not in remote_index or
+                remote_index.get(m["name"], ("", 0))[0] != m["sha256"] or
+                remote_index.get(m["name"], ("", 0))[1] < m["mtime"]
+            )
+        ]
+        to_upload = [
+            m for m in to_upload
+            if not m["name"].lower().endswith('.json')
+        ]
+
+        # 5. Find orphaned files (local files not on server)
+        orphans = [
+            m for m in local_meta
+            if (
+                not m["name"].lower().endswith('.json')
+                and m["name"] not in remote_index
+            )
+        ]
+
+        # 6. Display preview results
+        print(ctext("\n" + "=" * 60, Fore.CYAN))
+        print(ctext("📋 SYNC PREVIEW - Files that would be affected",
+                    Fore.CYAN))
+        print(ctext("=" * 60, Fore.CYAN))
+
+        # Downloads
+        if to_download:
+            msg = f"\n⬇️  DOWNLOADS ({len(to_download)} files):"
+            print(ctext(msg, Fore.MAGENTA))
+            for name in to_download:
+                if name in local_index:
+                    reason = "Local file is older"
+                else:
+                    reason = "New file from server"
+                print(ctext(f"  📥 {name}", Fore.CYAN))
+                print(ctext(f"      Reason: {reason}", Fore.WHITE))
+        else:
+            print(ctext("\n⬇️  DOWNLOADS: None", Fore.GREEN))
+
+        # Uploads
+        if to_upload:
+            msg = f"\n⬆️  UPLOADS ({len(to_upload)} files):"
+            print(ctext(msg, Fore.GREEN))
+            for m in to_upload:
+                name = m["name"]
+                if name in remote_index:
+                    local_hash = m["sha256"]
+                    local_mtime = m["mtime"]
+                    remote_hash, remote_mtime = remote_index[name]
+                    
+                    reasons = []
+                    if local_hash != remote_hash:
+                        reasons.append("Hash differs")
+                    if local_mtime > remote_mtime:
+                        reasons.append("Local newer")
+                    reason = (", ".join(reasons) if reasons
+                              else "Different content")
+                else:
+                    reason = "New file (not on server)"
+                
+                print(ctext(f"  📤 {name}", Fore.CYAN))
+                print(ctext(f"      Reason: {reason}", Fore.WHITE))
+        else:
+            print(ctext("\n⬆️  UPLOADS: None", Fore.GREEN))
+
+        # Orphaned files (would require user decision)
+        if orphans:
+            msg = (f"\n🤔 ORPHANED FILES ({len(orphans)} files) "
+                   "- User decision required:")
+            print(ctext(msg, Fore.YELLOW))
+            msg = "    These files exist locally but not on server:"
+            print(ctext(msg, Fore.WHITE))
+            for m in orphans:
+                print(ctext(f"  📄 {m['name']}", Fore.CYAN))
+            msg = ("\n    📝 Note: In interactive mode, "
+                   "you'll be asked whether to:")
+            print(ctext(msg, Fore.WHITE))
+            print(ctext("         • Upload each file to server", Fore.WHITE))
+            print(ctext("         • Move to deleted folder", Fore.WHITE))
+            print(ctext("         • Skip (leave as-is)", Fore.WHITE))
+            msg = ("    🤖 CLI modes: Use -cu (auto-upload) "
+                   "or -cd (auto-delete)")
+            print(ctext(msg, Fore.WHITE))
+        else:
+            print(ctext("\n🤔 ORPHANED FILES: None", Fore.GREEN))
+
+        # Summary
+        total_changes = len(to_download) + len(to_upload) + len(orphans)
+        print(ctext("\n📊 SUMMARY:", Fore.CYAN))
+        print(ctext(f"    Downloads: {len(to_download)} files", Fore.WHITE))
+        print(ctext(f"    Uploads:   {len(to_upload)} files", Fore.WHITE))
+        msg = f"    Orphans:   {len(orphans)} files (need decision)"
+        print(ctext(msg, Fore.WHITE))
+        msg = f"    Total:     {total_changes} files would be affected"
+        print(ctext(msg, Fore.WHITE))
+
+        if total_changes == 0:
+            print(ctext("\n🎉 All files are already synchronized!",
+                        Fore.GREEN))
+        else:
+            msg = "\n💡 To perform actual sync, use option 1 (Merge)"
+            print(ctext(msg, Fore.YELLOW))
+
+        print(ctext("\n" + "=" * 60, Fore.CYAN))
+        input(ctext("\nPress Enter to return to main menu...", Fore.YELLOW))
+
+    finally:
+        try:
+            os.chdir(orig_cwd)
+        except Exception:
+            pass
+
+
 def main_menu():
     show_current_config()
     width = 48
@@ -581,6 +756,7 @@ def main_menu():
         print(box_line("2) 🖥 Start Server", width))
         print(box_line("3) ⚙ Change config (path/ip/port)", width))
         print(box_line("4) 📤 Push (delete local orphans)", width))
+        print(box_line("5) 📋 Preview (show planned changes)", width))
         print(box_line("q) 🚪 Quit", width))
         print(box_bottom(width))
 
@@ -594,6 +770,8 @@ def main_menu():
             show_current_config()  # Show updated config after changes
         elif choice == "4":
             delete_orphan_locals()
+        elif choice == "5":
+            preview_sync()
         elif choice == "q":
             print(ctext("\n👋 Goodbye! Exiting SyncZ...", Fore.GREEN))
             sys.exit(0)
@@ -941,6 +1119,8 @@ def parse_arguments():
                         help='Auto-upload orphaned files (use with -c)')
     parser.add_argument('-d', '--delete', action='store_true',
                         help='Auto-delete orphaned files (use with -c)')
+    parser.add_argument('-p', '--preview', action='store_true',
+                        help='Preview changes without performing sync')
     
     # Configuration flags
     parser.add_argument('--config', action='store_true',
@@ -962,21 +1142,32 @@ def main():
         if args.sync:
             # Validate conflicting flags
             if args.upload and args.delete:
-                print(ctext("❌ Error: Cannot use both --upload and --delete flags together", Fore.RED))
+                msg = ("❌ Error: Cannot use both --upload and --delete "
+                       "flags together")
+                print(ctext(msg, Fore.RED))
                 sys.exit(1)
             
             # Display mode information
             if args.upload:
                 print(ctext("🤖 SyncZ Auto-Upload Mode (-cu)", Fore.CYAN))
-                print(ctext("   All orphaned files will be automatically uploaded", Fore.CYAN))
+                msg = "   All orphaned files will be automatically uploaded"
+                print(ctext(msg, Fore.CYAN))
             elif args.delete:
                 print(ctext("🤖 SyncZ Auto-Delete Mode (-cd)", Fore.CYAN))
-                print(ctext("   All orphaned files will be automatically moved to deleted folder", Fore.CYAN))
+                msg = ("   All orphaned files will be automatically moved "
+                       "to deleted folder")
+                print(ctext(msg, Fore.CYAN))
             else:
                 print(ctext("🔄 SyncZ Interactive Sync Mode", Fore.CYAN))
             
             # Run sync with appropriate flags
             do_sync(auto_upload=args.upload, auto_delete=args.delete)
+            
+        elif args.preview:
+            print(ctext("👁️  SyncZ Preview Mode", Fore.CYAN))
+            msg = "   Showing changes without performing sync"
+            print(ctext(msg, Fore.CYAN))
+            preview_sync()
             
         elif args.config:
             show_current_config()
