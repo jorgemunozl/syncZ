@@ -621,26 +621,25 @@ def preview_sync():
             )
         ]
 
-        # 4. Calculate what would be uploaded
-        to_upload = [
-            m for m in local_meta
-            if (
-                m["name"] not in remote_index or
-                remote_index.get(m["name"], ("", 0))[0] != m["sha256"] or
-                remote_index.get(m["name"], ("", 0))[1] < m["mtime"]
-            )
-        ]
-        to_upload = [
-            m for m in to_upload
-            if not m["name"].lower().endswith('.json')
-        ]
-
-        # 5. Find orphaned files (local files not on server)
+        # 4. Find orphaned files first (local files not on server)
         orphans = [
             m for m in local_meta
             if (
                 not m["name"].lower().endswith('.json')
                 and m["name"] not in remote_index
+            )
+        ]
+
+        # 5. Calculate what would be uploaded (EXCLUDING orphans)
+        to_upload = [
+            m for m in local_meta
+            if (
+                not m["name"].lower().endswith('.json')
+                and m["name"] in remote_index  # Only files that exist on server
+                and (
+                    remote_index.get(m["name"], ("", 0))[0] != m["sha256"] or
+                    remote_index.get(m["name"], ("", 0))[1] < m["mtime"]
+                )
             )
         ]
 
@@ -875,17 +874,26 @@ def do_sync(auto_upload=False, auto_delete=False):
             )
         ]
 
+        # Find orphaned files first (local files not on server)
+        orphans = [
+            m for m in local_meta
+            if (
+                not m["name"].lower().endswith('.json')
+                and m["name"] not in remote_index
+            )
+        ]
+
+        # Build upload list, EXCLUDING orphans (they'll be handled separately)
         to_upload = [
             m for m in local_meta
             if (
-                m["name"] not in remote_index or
-                remote_index.get(m["name"], ("", 0))[0] != m["sha256"] or
-                remote_index.get(m["name"], ("", 0))[1] < m["mtime"]  # local is newer
+                not m["name"].lower().endswith('.json')
+                and m["name"] in remote_index  # Only files that exist on server
+                and (
+                    remote_index.get(m["name"], ("", 0))[0] != m["sha256"] or
+                    remote_index.get(m["name"], ("", 0))[1] < m["mtime"]
+                )
             )
-        ]
-        to_upload = [
-            m for m in to_upload
-            if not m["name"].lower().endswith('.json')
         ]
         
         # Debug: Show detailed upload reasons
@@ -914,14 +922,7 @@ def do_sync(auto_upload=False, auto_delete=False):
                 else:
                     print(ctext(f"  📄 {name}: New file (not on server)", Fore.CYAN))
 
-        # Ask user what to do with local-only orphan files (not on server)
-        orphans = [
-            m for m in local_meta
-            if (
-                not m["name"].lower().endswith('.json')
-                and m["name"] not in remote_index
-            )
-        ]
+        # Handle orphan files (local files not on server)
         if orphans:
             print(
                 ctext(
@@ -931,17 +932,21 @@ def do_sync(auto_upload=False, auto_delete=False):
             )
             
             if auto_upload:
-                print(ctext("🤖 Auto-upload mode: uploading all orphaned files...", Fore.CYAN))
+                msg = "🤖 Auto-upload mode: uploading all orphaned files..."
+                print(ctext(msg, Fore.CYAN))
                 for m in orphans:
                     if not any(x["name"] == m["name"] for x in to_upload):
                         to_upload.append(m)
-                        print(ctext(f"  ⬆️  Queued for upload: {m['name']}", Fore.GREEN))
+                        msg = f"  ⬆️  Queued for upload: {m['name']}"
+                        print(ctext(msg, Fore.GREEN))
             elif auto_delete:
-                print(ctext("🤖 Auto-delete mode: moving all orphaned files to deleted folder...", Fore.CYAN))
+                msg = ("🤖 Auto-delete mode: moving all orphaned files "
+                       "to deleted folder...")
+                print(ctext(msg, Fore.CYAN))
                 for m in orphans:
                     name = m["name"]
-                    # Remove from upload list FIRST to prevent any uploads
-                    to_upload = [x for x in to_upload if x["name"] != name]
+                    # No need to remove from upload list since orphans
+                    # are not in upload list anymore
                     
                     # Move file to deleted folder
                     fp = os.path.join(".", name)
@@ -956,12 +961,14 @@ def do_sync(auto_upload=False, auto_delete=False):
                                 )
                             )
                         else:
-                            print(ctext(f"  ❌ Failed to move {name}", Fore.RED))
+                            msg = f"  ❌ Failed to move {name}"
+                            print(ctext(msg, Fore.RED))
                     else:
                         warn = f"  ⚠️  File {name} not found locally"
                         print(ctext(warn, Fore.YELLOW))
             else:
-                print(ctext("Decide for each: upload, delete, or skip.", Fore.YELLOW))
+                msg = "Decide for each: upload, delete, or skip."
+                print(ctext(msg, Fore.YELLOW))
                 for m in orphans:
                     name = m["name"]
                     while True:
@@ -975,7 +982,7 @@ def do_sync(auto_upload=False, auto_delete=False):
                         print("Please answer u, d, or s.")
 
                     if ans == "u":
-                        # Ensure it's in to_upload
+                        # Add to upload list (orphans not in upload by default)
                         if not any(x["name"] == name for x in to_upload):
                             to_upload.append(m)
                     elif ans == "d":
@@ -988,10 +995,8 @@ def do_sync(auto_upload=False, auto_delete=False):
                                 print("Skipped.")
                                 continue
                         
-                        # Remove from upload list FIRST to prevent any uploads
-                        to_upload = [x for x in to_upload if x["name"] != name]
-                        
-                        # Move file to deleted folder
+                        # Move file to deleted folder (no need to remove from
+                        # upload list since orphans are not in upload list)
                         fp = os.path.join(".", name)
                         msg = f"  📁 Moving {name} to deleted folder..."
                         print(ctext(msg, Fore.YELLOW))
@@ -1004,13 +1009,12 @@ def do_sync(auto_upload=False, auto_delete=False):
                                     )
                                 )
                             else:
-                                print(ctext(f"  ❌ Failed to move {name}", Fore.RED))
+                                msg = f"  ❌ Failed to move {name}"
+                                print(ctext(msg, Fore.RED))
                         else:
                             warn = f"  ⚠️  File {name} not found locally"
                             print(ctext(warn, Fore.YELLOW))
-                    else:  # skip
-                        # Ensure it won't upload
-                        to_upload = [x for x in to_upload if x["name"] != name]
+                    # For skip option, do nothing (orphan stays as-is)
 
         # Debug: Show final upload list after processing orphans
         if to_upload:
