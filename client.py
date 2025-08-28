@@ -42,6 +42,83 @@ except ImportError:
     COLOR_ENABLED = False
 
 
+def detect_moves(local_meta, remote_meta):
+    """Detect file moves by comparing SHA256 hashes between local and remote"""
+    # Create hash-to-path mappings
+    local_hash_to_path = {}
+    remote_hash_to_path = {}
+    
+    for m in local_meta:
+        if not m["name"].lower().endswith('.json'):
+            hash_val = m["sha256"]
+            if hash_val not in local_hash_to_path:
+                local_hash_to_path[hash_val] = []
+            local_hash_to_path[hash_val].append(m["name"])
+    
+    for m in remote_meta:
+        if not m["name"].lower().endswith('.json'):
+            hash_val = m["sha256"]
+            if hash_val not in remote_hash_to_path:
+                remote_hash_to_path[hash_val] = []
+            remote_hash_to_path[hash_val].append(m["name"])
+    
+    # Detect moves: same hash, different paths
+    moves = []
+    
+    # Check for files that moved from remote to local (need to move locally)
+    for hash_val, remote_paths in remote_hash_to_path.items():
+        if hash_val in local_hash_to_path:
+            local_paths = local_hash_to_path[hash_val]
+            
+            # Find paths that exist on remote but not locally (potential moves)
+            for remote_path in remote_paths:
+                if remote_path not in local_paths:
+                    # Check if there's a local path with same hash but 
+                    # different location
+                    for local_path in local_paths:
+                        if local_path not in remote_paths:
+                            # This is a move: remote_path -> local_path
+                            moves.append({
+                                'type': 'remote_to_local',
+                                'hash': hash_val,
+                                'from_path': remote_path,
+                                'to_path': local_path,
+                                'action': 'move_local'  # Move file locally to match remote
+                            })
+                            break
+    
+    # Check for files that moved from local to remote (need to move on server)
+    for hash_val, local_paths in local_hash_to_path.items():
+        if hash_val in remote_hash_to_path:
+            remote_paths = remote_hash_to_path[hash_val]
+            
+            # Find paths that exist locally but not remotely (potential moves)
+            for local_path in local_paths:
+                if local_path not in remote_paths:
+                    # Check if there's a remote path with same hash but different location
+                    for remote_path in remote_paths:
+                        if remote_path not in local_paths:
+                            # This is a move: local_path -> remote_path
+                            # Check if we haven't already processed this move
+                            move_exists = any(
+                                m['type'] == 'local_to_remote' and 
+                                m['from_path'] == local_path and 
+                                m['to_path'] == remote_path
+                                for m in moves
+                            )
+                            if not move_exists:
+                                moves.append({
+                                    'type': 'local_to_remote',
+                                    'hash': hash_val,
+                                    'from_path': local_path,
+                                    'to_path': remote_path,
+                                    'action': 'move_remote'  # Move file on server
+                                })
+                            break
+    
+    return moves
+
+
 def ctext(text, color=None):
     """Apply color to text if colorama is available"""
     if COLOR_ENABLED and color:
@@ -293,6 +370,27 @@ def sha256sum(path):
         for chunk in iter(lambda: f.read(4096), b""):
             h.update(chunk)
     return h.hexdigest()
+
+
+def request_file_move(base_url, from_path, to_path):
+    """Request server to move a file from one path to another"""
+    move_url = f"{base_url}/move"
+    move_data = {
+        "from_path": from_path,
+        "to_path": to_path
+    }
+    
+    try:
+        response = requests.post(move_url, json=move_data, timeout=10)
+        if response.status_code == 200:
+            print(ctext(f"✅ Server moved: {from_path} → {to_path}", Fore.GREEN))
+            return True
+        else:
+            print(ctext(f"❌ Server move failed: {response.status_code}", Fore.RED))
+            return False
+    except requests.exceptions.RequestException as e:
+        print(ctext(f"❌ Move request failed: {e}", Fore.RED))
+        return False
 
 
 def request_metadata_regeneration(base_url):
@@ -873,6 +971,60 @@ def do_sync(auto_upload=False, auto_delete=False):
         local_meta = generate_file_list(path)
         with open("file_list.json", "w", encoding="utf-8") as f:
             json.dump(local_meta, f, indent=2)
+
+        # 3. Detect file moves before other operations
+        print(ctext("\n🔍 Detecting file moves...", Fore.BLUE))
+        moves = detect_moves(local_meta, remote_meta)
+        
+        if moves:
+            print(ctext(f"\n📋 Detected {len(moves)} file moves:", Fore.CYAN))
+            for move in moves:
+                from_path = move['from_path']
+                to_path = move['to_path']
+                print(ctext(f"  🔄 {from_path} → {to_path}", Fore.CYAN))
+                
+                if move['action'] == 'move_remote':
+                    # File moved locally, need to move on server
+                    success = request_file_move(BASE_URL, from_path, to_path)
+                    if not success:
+                        print(ctext("  ❌ Failed to move on server", Fore.RED))
+                        
+                elif move['action'] == 'move_local':
+                    # File moved on server, need to move locally
+                    try:
+                        # Create destination directory if needed
+                        os.makedirs(os.path.dirname(to_path), exist_ok=True)
+                        
+                        # Move the local file
+                        if os.path.exists(from_path):
+                            os.rename(from_path, to_path)
+                            msg = f"  ✅ Moved locally: {from_path} → {to_path}"
+                            print(ctext(msg, Fore.GREEN))
+                        else:
+                            msg = f"  ⚠️  Source file not found: {from_path}"
+                            print(ctext(msg, Fore.YELLOW))
+                            
+                    except OSError as e:
+                        msg = f"  ❌ Failed to move locally: {e}"
+                        print(ctext(msg, Fore.RED))
+        else:
+            print(ctext("✅ No file moves detected", Fore.GREEN))
+
+        # 4. Rebuild indices after moves
+        if moves:
+            print(ctext("\n🔄 Refreshing metadata after moves...", Fore.BLUE))
+            # Regenerate local metadata after moves
+            local_meta = generate_file_list(path)
+            # Request server to regenerate metadata
+            request_metadata_regeneration(BASE_URL)
+            # Fetch updated remote metadata
+            try:
+                resp = requests.get(METADATA_URL, timeout=5)
+                resp.raise_for_status()
+                remote_meta = resp.json()
+            except requests.exceptions.RequestException:
+                msg = "⚠️  Could not fetch updated remote metadata"
+                print(ctext(msg, Fore.YELLOW))
 
         remote_index = {
             m["name"]: (m["sha256"], m.get("mtime", 0))

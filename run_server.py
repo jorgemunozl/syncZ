@@ -208,6 +208,57 @@ class SyncHandler(http.server.SimpleHTTPRequestHandler):
                 self.wfile.write(json.dumps(response).encode())
                 print(ctext(f"✅ Regenerated metadata with {len(data)} files", Fore.GREEN))
                 
+            elif self.path == '/move':
+                print(ctext("🔄 Processing file move...", Fore.CYAN))
+                
+                # Read the request body for move data
+                content_length = int(self.headers.get('Content-Length', 0))
+                if content_length > 0:
+                    body = self.rfile.read(content_length)
+                    try:
+                        move_data = json.loads(body.decode())
+                        from_path = move_data.get('from_path')
+                        to_path = move_data.get('to_path')
+                        
+                        print(ctext(f"📁 Moving: {from_path} → {to_path}", Fore.BLUE))
+                        
+                        if from_path and to_path:
+                            # Get the sync directory
+                            config = load_config()
+                            sync_path = config.get("path", DEFAULT_PATH)
+                            
+                            full_from_path = os.path.join(sync_path, from_path)
+                            full_to_path = os.path.join(sync_path, to_path)
+                            
+                            # Create destination directory if it doesn't exist
+                            os.makedirs(os.path.dirname(full_to_path), exist_ok=True)
+                            
+                            # Move the file
+                            if os.path.exists(full_from_path):
+                                os.rename(full_from_path, full_to_path)
+                                
+                                self.send_response(200)
+                                self.send_header('Content-Type', 'application/json')
+                                self.end_headers()
+                                response = {
+                                    "status": "success",
+                                    "message": f"File moved successfully from {from_path} to {to_path}"
+                                }
+                                self.wfile.write(json.dumps(response).encode())
+                                print(ctext(f"✅ File moved successfully: {from_path} → {to_path}", Fore.GREEN))
+                            else:
+                                self.send_error(404, f"Source file not found: {from_path}")
+                                print(ctext(f"❌ Source file not found: {from_path}", Fore.RED))
+                        else:
+                            self.send_error(400, "Missing from_path or to_path")
+                            print(ctext("❌ Missing from_path or to_path", Fore.RED))
+                    except json.JSONDecodeError:
+                        self.send_error(400, "Invalid JSON in request body")
+                        print(ctext("❌ Invalid JSON in request body", Fore.RED))
+                else:
+                    self.send_error(400, "Empty request body")
+                    print(ctext("❌ Empty request body", Fore.RED))
+                
             elif self.path == '/upload':
                 print(ctext("📤 Processing file upload...", Fore.CYAN))
                 
