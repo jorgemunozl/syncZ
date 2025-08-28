@@ -49,6 +49,25 @@ def ctext(text, color=None):
     return text
 
 
+def format_file_size(size_bytes):
+    """Format file size in human-readable format"""
+    if size_bytes == 0:
+        return "0 B"
+    
+    size_names = ["B", "KB", "MB", "GB", "TB"]
+    i = 0
+    size = float(size_bytes)
+    
+    while size >= 1024.0 and i < len(size_names) - 1:
+        size /= 1024.0
+        i += 1
+    
+    if i == 0:  # Bytes
+        return f"{int(size)} {size_names[i]}"
+    else:
+        return f"{size:.2f} {size_names[i]}"
+
+
 def clean_old_deleted_files(deleted_dir="deleted", days=10):
     """Remove files from deleted directory that are older than specified days"""
     if not os.path.exists(deleted_dir):
@@ -1046,6 +1065,17 @@ def do_sync(auto_upload=False, auto_delete=False):
                 sys.stdout.write("\n")
                 orig_mtime = remote_index[name][1]
                 os.utime(name, (orig_mtime, orig_mtime))
+                
+                # Show download success with file size
+                try:
+                    file_size = os.path.getsize(name)
+                    file_size_readable = format_file_size(file_size)
+                    msg = (f"    ✅ Downloaded successfully "
+                           f"({file_size_readable})")
+                    print(ctext(msg, Fore.GREEN))
+                except OSError:
+                    msg = "    ✅ Downloaded successfully"
+                    print(ctext(msg, Fore.GREEN))
 
         # Important: do not delete local-only files.
         # If a file exists locally but not on the server, treat it as a
@@ -1073,7 +1103,15 @@ def do_sync(auto_upload=False, auto_delete=False):
                     response = upload_with_rich(session, m["name"], f"{BASE_URL}/upload", config, m["mtime"])
                     
                     if response and response.status_code == 200:
-                        print(ctext("    ✅ Uploaded successfully", Fore.GREEN))
+                        # Get file size for success message
+                        try:
+                            file_size = os.path.getsize(m["name"])
+                            file_size_readable = format_file_size(file_size)
+                            msg = (f"    ✅ Uploaded successfully "
+                                   f"({file_size_readable})")
+                            print(ctext(msg, Fore.GREEN))
+                        except OSError:
+                            print(ctext("    ✅ Uploaded successfully", Fore.GREEN))
                     else:
                         status = response.status_code if response else 'No response'
                         print(ctext(f"    ❌ Upload failed with status: {status}", Fore.RED))

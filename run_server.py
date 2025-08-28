@@ -35,6 +35,25 @@ def ctext(text, color=None):
     return text
 
 
+def format_file_size(size_bytes):
+    """Format file size in human-readable format"""
+    if size_bytes == 0:
+        return "0 B"
+    
+    size_names = ["B", "KB", "MB", "GB", "TB"]
+    i = 0
+    size = float(size_bytes)
+    
+    while size >= 1024.0 and i < len(size_names) - 1:
+        size /= 1024.0
+        i += 1
+    
+    if i == 0:  # Bytes
+        return f"{int(size)} {size_names[i]}"
+    else:
+        return f"{size:.2f} {size_names[i]}"
+
+
 # --- Configuration ---
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(SCRIPT_DIR, "config.json")
@@ -160,7 +179,8 @@ class SyncHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_header('Content-Length', str(len(data)))
                 self.end_headers()
                 self.wfile.write(data)
-                print(ctext(f"✅ Served metadata ({len(data)} bytes)", Fore.GREEN))
+                metadata_size = format_file_size(len(data))
+                print(ctext(f"✅ Served metadata ({metadata_size})", Fore.GREEN))
             except FileNotFoundError:
                 self.send_error(404, "Metadata not found")
                 print(ctext("❌ Metadata file not found", Fore.RED))
@@ -213,7 +233,9 @@ class SyncHandler(http.server.SimpleHTTPRequestHandler):
                 
                 # Read the request body
                 body = self.rfile.read(content_length)
-                print(ctext(f"📦 Read {len(body)} bytes", Fore.BLUE))
+                body_size = format_file_size(len(body))
+                msg = f"📦 Read {body_size} ({len(body):,} bytes)"
+                print(ctext(msg, Fore.BLUE))
                 
                 # Parse multipart data
                 parts = parse_multipart_form_data(boundary, body)
@@ -235,7 +257,11 @@ class SyncHandler(http.server.SimpleHTTPRequestHandler):
                 file_content = file_part['content']
                 
                 print(ctext(f"📄 Filename: {filename}", Fore.GREEN))
-                print(ctext(f"💾 File size: {len(file_content)} bytes", Fore.GREEN))
+                file_size_bytes = len(file_content)
+                file_size_readable = format_file_size(file_size_bytes)
+                msg = (f"💾 File size: {file_size_readable} "
+                       f"({file_size_bytes:,} bytes)")
+                print(ctext(msg, Fore.GREEN))
                 
                 # Get optional fields
                 mtime = 0
@@ -276,7 +302,10 @@ class SyncHandler(http.server.SimpleHTTPRequestHandler):
                     print(ctext(f"🕒 Set mtime to {mtime}", Fore.BLUE))
                 
                 file_size = os.path.getsize(filepath)
-                print(ctext(f"✅ Upload successful: {final_filename} ({file_size} bytes)", Fore.GREEN))
+                file_size_readable = format_file_size(file_size)
+                msg = (f"✅ Upload successful: {final_filename} "
+                       f"({file_size_readable})")
+                print(ctext(msg, Fore.GREEN))
                 
                 # Send success response
                 self.send_response(200)
