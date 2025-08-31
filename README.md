@@ -2,21 +2,35 @@
 
 SyncZ is a modern, user-friendly file synchronization tool designed to keep files synchronized between multiple devices over a local network. With its beautiful colored interface and intelligent features, it's perfect for syncing files between desktop, laptop, and mobile devices using Termux.
 
+## 📸 Screenshots
 
+### 🎮 Main Menu Interface
+![SyncZ Main Menu](MENU.png)
+*Beautiful color-coded main menu with configuration display*
 
+### ⚙️ Configuration Interface  
+![Configuration Settings](config.png)
+*Interactive configuration management with real-time validation*
+
+### 🖥️ Server Interface
+![Server Running](startserver.png)
+*Clean server logs with file transfer monitoring*
 
 
 ## ✨ Key Features
 
-- 🎨 **Beautiful Interface**: Colorful, emoji-rich console interface with professional menus
+- 🎨 **Beautiful Interface**: Colorful, emoji-rich console interface with professional menus and progress bars
 - 🔄 **Bidirectional Sync**: Automatically detects and syncs newer files in both directions
 - 🧠 **Smart Transfer**: Only transfers files that have changed (based on modification time and SHA256 hash)
-- 📱 **Mobile-Friendly**: Works seamlessly with Termux on Android devices
+- � **Move Detection**: Intelligent file move detection prevents unnecessary downloads
+- 📊 **Rich Progress Display**: Real-time upload progress with file counters and human-readable sizes
+- �📱 **Mobile-Friendly**: Works seamlessly with Termux on Android devices
 - 🛡️ **Safety Features**: PDF deletion confirmation and recycle bin system (10-day auto-cleanup)
-- ⚙️ **Easy Configuration**: Interactive configuration management with beautiful displays
+- ⚙️ **Easy Configuration**: Interactive configuration management with beautiful box-style displays
 - 🌐 **Unified Interface**: Single entry point with multiple operation modes
 - 🖥️ **Server Detection**: Graceful handling of server connectivity issues
 - 📄 **PDF Search Bar**: Fast PDF launcher with keyboard shortcuts and full path display
+- 🎯 **Clean Logging**: Human-readable server logs with file sizes in MB/GB format
 
 ## 📄 PDF Search Bar
 
@@ -116,34 +130,61 @@ python3 syncz -c
 When you launch SyncZ, you'll see:
 
 ```
-==================================================
-           CURRENT CONFIGURATION
-==================================================
-📁 Sync Path:   /home/user/zoteroReference
+===========================================
+          CURRENT CONFIGURATION
+===========================================
+� Local IP:    192.168.43.119
+�📁 Sync Path:   /home/user/zoteroReference
 🌐 Server IP:   192.168.1.100
 🔌 Server Port: 8000
-==================================================
+===========================================
 
-╔================================================╗
-║                SyncZ Main Menu                 ║
-╠================================================╣
-║  1) 🚀 Sync now (Client mode)                     ║
-║  2) 🖥️  Start Server                              ║
-║  3) ⚙️  Change config (path/ip/port)               ║
-║  q) 🚪 Quit                                      ║
-╚================================================╝
+╔══════════════════════════════════════════════╗
+║                SyncZ Main Menu               ║
+╠══════════════════════════════════════════════╣
+║1) � Merge                                   ║
+║2) 🖥 Start Server                             ║
+║3) ⚙ Change config (path/ip/port)             ║
+║4) 📤 Push (delete local orphans)             ║
+║5) 📋 Preview (show planned changes)          ║
+║q) 🚪 Quit                                    ║
+╚══════════════════════════════════════════════╝
+```
+
+### ⚙️ Configuration Interface
+
+The new configuration interface features a beautiful box-style layout:
+
+```
+╔══════════════════════════════════════════════╗
+║             ⚙️  SyncZ Configuration           ║
+╠══════════════════════════════════════════════╣
+║📁 Sync Path: /home/user/zoteroReference     ║
+║🌐 Server IP: 192.168.1.100                  ║
+║🔌 Server Port: 8000                         ║
+╠══════════════════════════════════════════════╣
+║1) 📁 Change sync path                       ║
+║2) 🌐 Change server IP                       ║
+║3) 🔌 Change server port                     ║
+║4) 📱 Use Termux preset                      ║
+║5) 💾 Save and exit                          ║
+║q) 🚪 Exit without saving                    ║
+╚══════════════════════════════════════════════╝
 ```
 
 ## 🏗️ System Architecture
 
 ### 🖥️ Server Mode
 - **Beautiful startup**: Colorful configuration display and status messages
-- **Real-time logging**: Colored request logging with timestamps and file details
+- **Human-readable logging**: Clean file transfer logs with MB/GB file sizes
 - **Smart metadata**: Automatic file list generation with integrity checking
+- **Progress tracking**: Real-time upload monitoring with file counters
 - **Graceful shutdown**: Professional stop messages
 
 ### 💻 Client Mode
 - **Server detection**: Automatic connection validation with fallback to menu
+- **Move detection**: SHA256-based file move detection to prevent unnecessary transfers
+- **Rich progress bars**: Beautiful upload progress with file counts and transfer speeds
 - **Smart sync logic**: Intelligent file comparison and transfer decisions
 - **Safety confirmations**: PDF deletion requires user confirmation
 - **Recycle bin**: Deleted files moved to `deleted/` folder with 10-day auto-cleanup
