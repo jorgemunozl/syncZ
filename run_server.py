@@ -159,9 +159,51 @@ def parse_multipart_form_data(boundary, body):
 
 class SyncHandler(http.server.SimpleHTTPRequestHandler):
     def log_message(self, format, *args):
-        """Override to add colored logging"""
+        """Override to add colored logging with cleaner format"""
         timestamp = datetime.now().strftime("%H:%M:%S")
         message = format % args
+        
+        # Clean up the HTTP log message for better readability
+        if '"' in message and ' - ' in message:
+            # Extract just the method and path from standard HTTP log format
+            # Format: "GET /metadata HTTP/1.1" 200 -
+            try:
+                # "GET /metadata HTTP/1.1"
+                request_part = message.split('"')[1]
+                # ["GET", "/metadata"]
+                method_and_path = request_part.split(' ')[:2]
+                if len(method_and_path) == 2:
+                    method, path = method_and_path
+                    
+                    # Create cleaner log messages based on endpoint
+                    if method == "GET":
+                        if path == "/metadata":
+                            msg = f"📋 [{timestamp}] Client requested metadata"
+                            print(ctext(msg, Fore.BLUE))
+                        elif path.startswith("/"):
+                            msg = f"📥 [{timestamp}] Downloading: {path}"
+                            print(ctext(msg, Fore.BLUE))
+                        else:
+                            msg = f"📥 [{timestamp}] {method} {path}"
+                            print(ctext(msg, Fore.BLUE))
+                    elif method == "POST":
+                        if path == "/upload":
+                            msg = f"📤 [{timestamp}] File upload in progress..."
+                            print(ctext(msg, Fore.GREEN))
+                        elif path == "/move":
+                            msg = f"🔄 [{timestamp}] File move request"
+                            print(ctext(msg, Fore.CYAN))
+                        elif path == "/regenerate-metadata":
+                            msg = f"🔄 [{timestamp}] Metadata regeneration"
+                            print(ctext(msg, Fore.YELLOW))
+                        else:
+                            msg = f"📤 [{timestamp}] {method} {path}"
+                            print(ctext(msg, Fore.GREEN))
+                    return
+            except (IndexError, ValueError):
+                pass  # Fall through to default handling
+        
+        # Default handling for non-standard messages
         if "GET" in message:
             print(ctext(f"📥 [{timestamp}] {message}", Fore.BLUE))
         elif "POST" in message:
@@ -180,7 +222,8 @@ class SyncHandler(http.server.SimpleHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(data)
                 metadata_size = format_file_size(len(data))
-                print(ctext(f"✅ Served metadata ({metadata_size})", Fore.GREEN))
+                msg = f"✅ Served metadata ({metadata_size})"
+                print(ctext(msg, Fore.GREEN))
             except FileNotFoundError:
                 self.send_error(404, "Metadata not found")
                 print(ctext("❌ Metadata file not found", Fore.RED))
@@ -192,7 +235,8 @@ class SyncHandler(http.server.SimpleHTTPRequestHandler):
         
         try:
             if self.path == '/regenerate-metadata':
-                print(ctext("🔄 Client requested metadata regeneration...", Fore.YELLOW))
+                msg = "🔄 Client requested metadata regeneration..."
+                print(ctext(msg, Fore.YELLOW))
                 data = generate_file_list(os.getcwd())
                 with open("file_list.json", "w", encoding="utf-8") as f:
                     json.dump(data, f, indent=2)
