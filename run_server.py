@@ -158,6 +158,12 @@ def parse_multipart_form_data(boundary, body):
 
 
 class SyncHandler(http.server.SimpleHTTPRequestHandler):
+    def __init__(self, *args, **kwargs):
+        # Store upload info for better logging
+        self.upload_filename = None
+        self.upload_size = None
+        super().__init__(*args, **kwargs)
+    
     def log_message(self, format, *args):
         """Override to add colored logging with cleaner format"""
         timestamp = datetime.now().strftime("%H:%M:%S")
@@ -188,7 +194,16 @@ class SyncHandler(http.server.SimpleHTTPRequestHandler):
                             print(ctext(msg, Fore.BLUE))
                     elif method == "POST":
                         if path == "/upload":
-                            msg = f"📤 [{timestamp}] File upload in progress..."
+                            # Enhanced upload message with filename if available
+                            if (hasattr(self, 'upload_filename') and
+                                    self.upload_filename):
+                                filename = self.upload_filename
+                                size_info = ""
+                                if self.upload_size:
+                                    size_info = f" ({self.upload_size})"
+                                msg = f"📤 [{timestamp}] Uploading: {filename}{size_info}"
+                            else:
+                                msg = f"📤 [{timestamp}] File upload in progress..."
                             print(ctext(msg, Fore.GREEN))
                         elif path == "/move":
                             msg = f"🔄 [{timestamp}] File move request"
@@ -304,14 +319,9 @@ class SyncHandler(http.server.SimpleHTTPRequestHandler):
                     print(ctext("❌ Empty request body", Fore.RED))
                 
             elif self.path == '/upload':
-                print(ctext("📤 Processing file upload...", Fore.CYAN))
-                
-                # Get content type and boundary
+                # Get content type and length
                 content_type = self.headers.get('Content-Type', '')
                 content_length = int(self.headers.get('Content-Length', 0))
-                
-                print(ctext(f"📋 Content-Type: {content_type}", Fore.BLUE))
-                print(ctext(f"📏 Content-Length: {content_length}", Fore.BLUE))
                 
                 if not content_type.startswith('multipart/form-data'):
                     self.send_error(400, "Expected multipart/form-data")
@@ -324,17 +334,10 @@ class SyncHandler(http.server.SimpleHTTPRequestHandler):
                     return
                 
                 boundary = content_type[boundary_start + 9:].strip().encode()
-                print(ctext(f"🔗 Boundary: {boundary.decode()}", Fore.BLUE))
                 
-                # Read the request body
+                # Read and parse the request body
                 body = self.rfile.read(content_length)
-                body_size = format_file_size(len(body))
-                msg = f"📦 Read {body_size} ({len(body):,} bytes)"
-                print(ctext(msg, Fore.BLUE))
-                
-                # Parse multipart data
                 parts = parse_multipart_form_data(boundary, body)
-                print(ctext(f"📂 Found parts: {list(parts.keys())}", Fore.BLUE))
                 
                 # Validate required fields
                 if 'file' not in parts:
@@ -350,12 +353,14 @@ class SyncHandler(http.server.SimpleHTTPRequestHandler):
                 
                 filename = file_part['filename']
                 file_content = file_part['content']
-                
-                print(ctext(f"📄 Filename: {filename}", Fore.GREEN))
                 file_size_bytes = len(file_content)
                 file_size_readable = format_file_size(file_size_bytes)
-                msg = (f"💾 File size: {file_size_readable} "
-                       f"({file_size_bytes:,} bytes)")
+                
+                # Store info for enhanced logging in log_message
+                self.upload_filename = filename
+                self.upload_size = file_size_readable
+                
+                msg = f"📤 Receiving: {filename} ({file_size_readable})"
                 print(ctext(msg, Fore.GREEN))
                 
                 # Get optional fields
@@ -365,13 +370,11 @@ class SyncHandler(http.server.SimpleHTTPRequestHandler):
                 if 'mtime' in parts and parts['mtime']['type'] == 'field':
                     try:
                         mtime = float(parts['mtime']['content'])
-                        print(ctext(f"📅 MTime: {mtime}", Fore.BLUE))
                     except ValueError:
                         print(ctext("⚠️  Invalid mtime, using 0", Fore.YELLOW))
                 
                 if 'relpath' in parts and parts['relpath']['type'] == 'field':
                     relpath = parts['relpath']['content']
-                    print(ctext(f"📁 Relative path: {relpath}", Fore.BLUE))
                 
                 # Determine file path
                 if relpath:
@@ -385,8 +388,6 @@ class SyncHandler(http.server.SimpleHTTPRequestHandler):
                     final_filename = filename
                     filepath = os.path.join(path, filename)
                 
-                print(ctext(f"💾 Saving to: {filepath}", Fore.YELLOW))
-                
                 # Write file
                 with open(filepath, 'wb') as f:
                     f.write(file_content)
@@ -394,12 +395,11 @@ class SyncHandler(http.server.SimpleHTTPRequestHandler):
                 # Set modification time
                 if mtime > 0:
                     os.utime(filepath, (mtime, mtime))
-                    print(ctext(f"🕒 Set mtime to {mtime}", Fore.BLUE))
                 
+                # Success message
                 file_size = os.path.getsize(filepath)
-                file_size_readable = format_file_size(file_size)
-                msg = (f"✅ Upload successful: {final_filename} "
-                       f"({file_size_readable})")
+                size_readable = format_file_size(file_size)
+                msg = f"✅ Upload completed: {final_filename} ({size_readable})"
                 print(ctext(msg, Fore.GREEN))
                 
                 # Send success response
