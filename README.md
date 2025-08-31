@@ -2,6 +2,10 @@
 
 SyncZ is a modern, user-friendly file synchronization tool designed to keep files synchronized between multiple devices over a local network. With its beautiful colored interface and intelligent features, it's perfect for syncing files between desktop, laptop, and mobile devices using Termux.
 
+
+
+
+
 ## ✨ Key Features
 
 - 🎨 **Beautiful Interface**: Colorful, emoji-rich console interface with professional menus

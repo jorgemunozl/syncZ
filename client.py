@@ -902,29 +902,143 @@ def main_menu():
 
 
 def change_config():
+    """Enhanced configuration interface with beautiful formatting"""
     config = load_config()
-    print(f"Current path: {config.get('path', DEFAULT_PATH)}")
-    print("Options: press Enter to keep current, or 't' for Termux preset")
-    print("Termux preset path: /root/shared/zoteroReference")
-    new_path = input("New sync path or shortcut: ").strip()
-    if new_path.lower() in ("t", "termux"):
-        config["path"] = "/root/shared/zoteroReference"
-    elif new_path:
-        config["path"] = new_path
-    print(f"Current server IP: {config.get('server_ip', DEFAULT_SERVER_IP)}")
-    new_ip = input("Enter new server IP (leave blank to keep): ").strip()
-    if new_ip:
-        config["server_ip"] = new_ip
-    print(f"Current server port: {config.get('server_port', DEFAULT_SERVER_PORT)}")
-    new_port = input("Enter new server port (leave blank to keep): ").strip()
-    if new_port:
-        try:
-            config["server_port"] = int(new_port)
-        except ValueError:
-            print("Invalid port, keeping previous.")
-    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-        json.dump(config, f, indent=2)
-    print("Config updated.")
+    width = 48
+    
+    while True:
+        # Display current configuration in a beautiful box
+        print(ctext("\n" + box_top(width), None))
+        print(box_line("⚙️  SyncZ Configuration", width,
+                       content_color=Fore.YELLOW, align="center"))
+        print(box_sep(width))
+        
+        # Current settings
+        current_path = config.get('path', DEFAULT_PATH)
+        current_ip = config.get('server_ip', DEFAULT_SERVER_IP)
+        current_port = config.get('server_port', DEFAULT_SERVER_PORT)
+        
+        print(box_line(f"📁 Sync Path: {current_path}", width,
+                       content_color=Fore.WHITE))
+        print(box_line(f"🌐 Server IP: {current_ip}", width,
+                       content_color=Fore.WHITE))
+        print(box_line(f"🔌 Server Port: {current_port}", width,
+                       content_color=Fore.WHITE))
+        
+        print(box_sep(width))
+        print(box_line("1) 📁 Change sync path", width))
+        print(box_line("2) 🌐 Change server IP", width))
+        print(box_line("3) 🔌 Change server port", width))
+        print(box_line("4) 📱 Use Termux preset", width))
+        print(box_line("5) 💾 Save and exit", width))
+        print(box_line("q) 🚪 Exit without saving", width))
+        print(box_bottom(width))
+        
+        choice = input(ctext("Choose an option: ", Fore.YELLOW))
+        choice = choice.strip().lower()
+        
+        if choice == "1":
+            print(ctext("\n📁 Configure Sync Path", Fore.CYAN))
+            print(ctext(f"Current: {current_path}", Fore.WHITE))
+            prompt = "Enter new path (or press Enter to keep current):"
+            print(ctext(prompt, Fore.YELLOW))
+            new_path = input(ctext("Path: ", Fore.GREEN)).strip()
+            if new_path:
+                if os.path.exists(new_path):
+                    config["path"] = new_path
+                    print(ctext("✅ Path updated successfully!", Fore.GREEN))
+                else:
+                    create_prompt = "Path doesn't exist. Create it? (y/n): "
+                    create = input(ctext(create_prompt, Fore.YELLOW))
+                    if create.lower() in ('y', 'yes'):
+                        try:
+                            os.makedirs(new_path, exist_ok=True)
+                            config["path"] = new_path
+                            msg = "✅ Path created and updated successfully!"
+                            print(ctext(msg, Fore.GREEN))
+                        except Exception as e:
+                            err_msg = f"❌ Error setting path: {e}"
+                            print(ctext(err_msg, Fore.RED))
+                    else:
+                        print(ctext("❌ Path not changed.", Fore.YELLOW))
+            else:
+                print(ctext("📁 Path unchanged.", Fore.BLUE))
+                
+        elif choice == "2":
+            print(ctext("\n🌐 Configure Server IP", Fore.CYAN))
+            print(ctext(f"Current: {current_ip}", Fore.WHITE))
+            print(ctext("Common options:", Fore.YELLOW))
+            print(ctext("  127.0.0.1  - Local only", Fore.WHITE))
+            print(ctext("  192.168.x.x - Local network", Fore.WHITE))
+            new_ip = input(ctext("New IP (or press Enter to keep): ",
+                                 Fore.GREEN)).strip()
+            if new_ip:
+                # Basic IP validation
+                parts = new_ip.split('.')
+                is_valid = (len(parts) == 4 and
+                            all(part.isdigit() and 0 <= int(part) <= 255
+                                for part in parts))
+                if is_valid:
+                    config["server_ip"] = new_ip
+                    print(ctext("✅ Server IP updated successfully!",
+                                Fore.GREEN))
+                else:
+                    err_msg = "❌ Invalid IP format. Please use x.x.x.x format."
+                    print(ctext(err_msg, Fore.RED))
+            else:
+                print(ctext("🌐 IP unchanged.", Fore.BLUE))
+                
+        elif choice == "3":
+            print(ctext("\n🔌 Configure Server Port", Fore.CYAN))
+            print(ctext(f"Current: {current_port}", Fore.WHITE))
+            print(ctext("Common ports: 8000, 8080, 3000, 5000", Fore.YELLOW))
+            new_port = input(ctext("New port (or press Enter to keep): ",
+                                   Fore.GREEN)).strip()
+            if new_port:
+                try:
+                    port_num = int(new_port)
+                    if 1 <= port_num <= 65535:
+                        config["server_port"] = port_num
+                        print(ctext("✅ Server port updated successfully!",
+                                    Fore.GREEN))
+                    else:
+                        err_msg = "❌ Port must be between 1 and 65535."
+                        print(ctext(err_msg, Fore.RED))
+                except ValueError:
+                    print(ctext("❌ Invalid port number.", Fore.RED))
+            else:
+                print(ctext("🔌 Port unchanged.", Fore.BLUE))
+                
+        elif choice == "4":
+            print(ctext("\n📱 Applying Termux Preset...", Fore.CYAN))
+            termux_path = "/root/shared/zoteroReference"
+            config["path"] = termux_path
+            config["server_ip"] = "192.168.43.119"  # Common mobile hotspot IP
+            config["server_port"] = 8000
+            print(ctext("✅ Termux preset applied:", Fore.GREEN))
+            print(ctext(f"  📁 Path: {termux_path}", Fore.WHITE))
+            print(ctext("  🌐 IP: 192.168.43.119", Fore.WHITE))
+            print(ctext("  🔌 Port: 8000", Fore.WHITE))
+            
+        elif choice == "5":
+            # Save configuration
+            try:
+                with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+                    json.dump(config, f, indent=2)
+                print(ctext("\n💾 Configuration saved successfully!",
+                            Fore.GREEN))
+                break
+            except Exception as e:
+                print(ctext(f"❌ Error saving config: {e}", Fore.RED))
+                
+        elif choice == "q":
+            print(ctext("\n🚪 Exiting without saving changes.", Fore.YELLOW))
+            break
+            
+        else:
+            print(ctext("❌ Invalid option. Please try again.", Fore.RED))
+        
+        input(ctext("\nPress Enter to continue...", Fore.CYAN))
 
 
 def start_server():
