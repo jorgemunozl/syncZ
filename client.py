@@ -227,8 +227,11 @@ def make_session():
 
 
 def upload_with_rich(session, file_path, upload_url, server_config, mtime=None):
-    """Upload a file with Rich progress bar"""
+    """Upload a file with Rich progress bar and improved display"""
     try:
+        file_size = os.path.getsize(file_path)
+        file_size_readable = format_file_size(file_size)
+        
         with open(file_path, 'rb') as f:
             # Create the multipart encoder with file and mtime
             fields = {'file': (os.path.basename(file_path), f, 'application/octet-stream')}
@@ -237,10 +240,10 @@ def upload_with_rich(session, file_path, upload_url, server_config, mtime=None):
                 
             encoder = MultipartEncoder(fields=fields)
             
-            # Create progress bar
+            # Create enhanced progress bar
             progress = Progress(
                 "[progress.description]{task.description}",
-                BarColumn(),
+                BarColumn(bar_width=30),
                 "[progress.percentage]{task.percentage:>3.0f}%",
                 "•",
                 "[progress.filesize]{task.completed}/{task.total}",
@@ -248,11 +251,14 @@ def upload_with_rich(session, file_path, upload_url, server_config, mtime=None):
                 TransferSpeedColumn(),
                 "•",
                 TimeRemainingColumn(),
+                transient=True  # Remove progress bar when done
             )
             
             with progress:
+                filename = os.path.basename(file_path)
+                task_description = f"    🚀 {filename} ({file_size_readable})"
                 task_id = progress.add_task(
-                    f"Uploading {os.path.basename(file_path)}",
+                    task_description,
                     total=encoder.len
                 )
                 
@@ -1242,47 +1248,61 @@ def do_sync(auto_upload=False, auto_delete=False):
             # Create session with retry configuration
             session = make_session()
             
-            for m in to_upload:
+            for i, m in enumerate(to_upload, 1):
                 # Skip files that no longer exist (e.g., moved to deleted folder)
                 if not os.path.exists(m["name"]):
-                    print(ctext(f"  ⏭️  Skipping {m['name']} (file not found)", Fore.YELLOW))
+                    msg = f"  ⏭️  Skipping {m['name']} (file not found)"
+                    print(ctext(msg, Fore.YELLOW))
                     continue
-                    
-                print(ctext(f"  📤 {m['name']}", Fore.GREEN))
+                
+                # Get file size for upload message
+                try:
+                    file_size = os.path.getsize(m["name"])
+                    file_size_readable = format_file_size(file_size)
+                    filename = m['name']
+                    count_info = f"[{i}/{len(to_upload)}]"
+                    size_info = f"({file_size_readable})"
+                    msg = f"  📤 {count_info} {filename} {size_info}"
+                    print(ctext(msg, Fore.GREEN))
+                except OSError:
+                    msg = f"  📤 [{i}/{len(to_upload)}] {m['name']}"
+                    print(ctext(msg, Fore.GREEN))
                 
                 try:
                     # Use Rich progress bar for upload
-                    response = upload_with_rich(session, m["name"], f"{BASE_URL}/upload", config, m["mtime"])
+                    upload_url = f"{BASE_URL}/upload"
+                    response = upload_with_rich(session, m["name"], upload_url,
+                                                config, m["mtime"])
                     
                     if response and response.status_code == 200:
                         # Get file size for success message
                         try:
                             file_size = os.path.getsize(m["name"])
-                            file_size_readable = format_file_size(file_size)
-                            msg = (f"    ✅ Uploaded successfully "
-                                   f"({file_size_readable})")
+                            size_readable = format_file_size(file_size)
+                            msg = f"    ✅ Upload completed ({size_readable})"
                             print(ctext(msg, Fore.GREEN))
                         except OSError:
-                            print(ctext("    ✅ Uploaded successfully", Fore.GREEN))
+                            print(ctext("    ✅ Upload completed", Fore.GREEN))
                     else:
-                        status = response.status_code if response else 'No response'
-                        print(ctext(f"    ❌ Upload failed with status: {status}", Fore.RED))
+                        status = response.status_code if response else 'None'
+                        msg = f"    ❌ Upload failed (HTTP {status})"
+                        print(ctext(msg, Fore.RED))
                     
                 except requests.exceptions.Timeout:
                     print(ctext("    ⏰ Upload timed out", Fore.YELLOW))
-                    print(ctext(f"    ⏰ Upload timeout for {m['name']}", Fore.RED))
                     continue
                 except requests.exceptions.ConnectionError:
-                    print()  # New line after progress bar
-                    print(ctext(f"    🔌 Connection error for {m['name']}", Fore.RED))
+                    print(ctext("    🔌 Connection error", Fore.RED))
                     continue
                 except requests.exceptions.RequestException as e:
-                    print()  # New line after progress bar
-                    print(ctext(f"    ❌ Request error for {m['name']}: {e}", Fore.RED))
+                    error_msg = str(e)[:50]
+                    msg = f"    ❌ Request error: {error_msg}..."
+                    print(ctext(msg, Fore.RED))
                     continue
                 except Exception as e:
-                    print()  # New line after progress bar
-                    print(ctext(f"    ❌ Unexpected error for {m['name']}: {e}", Fore.RED))
+                    error_msg = str(e)[:50]
+                    msg = f"    ❌ Unexpected error: {error_msg}..."
+                    print(ctext(msg, Fore.RED))
                     continue
 
         # 6. Update local metadata
