@@ -9,10 +9,9 @@ import argparse
 from datetime import datetime, timedelta
 import re
 import unicodedata
-from rich.progress import Progress, BarColumn, TimeRemainingColumn, TransferSpeedColumn
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-from requests_toolbelt.multipart.encoder import MultipartEncoder, MultipartEncoderMonitor
+from requests_toolbelt.multipart.encoder import MultipartEncoder
 try:
     from wcwidth import wcwidth as _wcwidth, wcswidth as _wcswidth
 except Exception:
@@ -227,56 +226,25 @@ def make_session():
 
 
 def upload_with_rich(session, file_path, upload_url, server_config, mtime=None):
-    """Upload a file with Rich progress bar and improved display"""
+    """Upload a file without showing progress bars (silent upload)."""
     try:
-        file_size = os.path.getsize(file_path)
-        file_size_readable = format_file_size(file_size)
-        
         with open(file_path, 'rb') as f:
-            # Create the multipart encoder with file and mtime
+            # Create the multipart encoder with file and optional mtime
             fields = {'file': (os.path.basename(file_path), f, 'application/octet-stream')}
             if mtime:
                 fields['mtime'] = str(mtime)
-                
+
             encoder = MultipartEncoder(fields=fields)
-            
-            # Create enhanced progress bar
-            progress = Progress(
-                "[progress.description]{task.description}",
-                BarColumn(bar_width=30),
-                "[progress.percentage]{task.percentage:>3.0f}%",
-                "•",
-                "[progress.filesize]{task.completed}/{task.total}",
-                "•",
-                TransferSpeedColumn(),
-                "•",
-                TimeRemainingColumn(),
-                transient=True  # Remove progress bar when done
+
+            # Perform upload without progress monitoring
+            response = session.post(
+                upload_url,
+                data=encoder,
+                headers={'Content-Type': encoder.content_type},
+                timeout=300
             )
-            
-            with progress:
-                filename = os.path.basename(file_path)
-                task_description = f"    🚀 {filename} ({file_size_readable})"
-                task_id = progress.add_task(
-                    task_description,
-                    total=encoder.len
-                )
-                
-                def update_progress(monitor):
-                    progress.update(task_id, completed=monitor.bytes_read)
-                
-                # Create monitor to track progress
-                monitor = MultipartEncoderMonitor(encoder, update_progress)
-                
-                # Upload the file
-                response = session.post(
-                    upload_url,
-                    data=monitor,
-                    headers={'Content-Type': monitor.content_type},
-                    timeout=300
-                )
-                
-                return response
+
+            return response
     except Exception as e:
         print(ctext(f"  ❌ Upload failed: {e}", Fore.RED))
         return None
@@ -311,6 +279,9 @@ CONFIG_FILE = os.path.join(SCRIPT_DIR, "config.json")
 DEFAULT_PATH = "/root/shared/zoteroReference"
 DEFAULT_SERVER_IP = "192.168.43.119"
 DEFAULT_SERVER_PORT = 8000
+
+# Consider small timestamp differences as equal to avoid ping-pong updates
+TIMESTAMP_TOLERANCE = 1.0  # seconds
 
 
 def load_config():
@@ -422,67 +393,7 @@ def request_metadata_regeneration(base_url):
 
 
 # --- Progress helpers -------------------------------------------------
-# Progress helpers
-def _format_size(n):
-    for unit in ('B', 'KB', 'MB', 'GB', 'TB'):
-        if n < 1024.0:
-            return f"{n:3.1f}{unit}"
-        n /= 1024.0
-    return f"{n:.1f}PB"
-
-
-def print_progress(name, transferred, total):
-    total = int(total) if total else 0
-    if total > 0:
-        pct = transferred / total
-        bar_len = 30
-        filled = int(pct * bar_len)
-        bar = "█" * filled + "-" * (bar_len - filled)
-        left = ctext("  " + name, Fore.CYAN)
-        stats = f"{pct*100:6.2f}% |{bar}| {_format_size(transferred)}/{_format_size(total)}"
-        sys.stdout.write(f"\r{left} {stats}")
-    else:
-        # Unknown total size
-        left = ctext("  " + name, Fore.CYAN)
-        sys.stdout.write(f"\r{left} {_format_size(transferred)} transferred")
-    sys.stdout.flush()
-
-
-class UploadFileWithProgress:
-    """
-    File-like wrapper for streaming uploads with progress reporting.
-    This is a working implementation that properly handles file streaming.
-    """
-    def __init__(self, path, callback=None):
-        self.path = path
-        self._file = open(path, 'rb')
-        self.callback = callback
-        self.total_size = os.path.getsize(path)
-        self.bytes_read = 0
-        
-    def read(self, size=-1):
-        """Read data from the file and report progress"""
-        data = self._file.read(size)
-        if data:
-            self.bytes_read += len(data)
-            if self.callback:
-                self.callback(self.path, self.bytes_read, self.total_size)
-        return data
-        
-    def __len__(self):
-        """Return the total file size"""
-        return self.total_size
-        
-    def close(self):
-        """Close the underlying file"""
-        if hasattr(self, '_file') and self._file:
-            self._file.close()
-            
-    def __enter__(self):
-        return self
-        
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.close()
+# Progress bar utilities removed as part of simplifying output (no progress bars)
 
 
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
@@ -1147,23 +1058,30 @@ def do_sync(auto_upload=False, auto_delete=False):
                 print(ctext(msg, Fore.YELLOW))
 
         remote_index = {
-            m["name"]: (m["sha256"], m.get("mtime", 0))
+            m["name"]: (m["sha256"], m.get("mtime", 0.0))
             for m in remote_meta
             if not m["name"].lower().endswith('.json')
         }
         local_index = {
-            m["name"]: (m["sha256"], m.get("mtime", 0))
+            m["name"]: (m["sha256"], m.get("mtime", 0.0))
             for m in local_meta
             if not m["name"].lower().endswith('.json')
         }
 
-        to_download = [
-            name for name, (remote_hash, remote_mtime) in remote_index.items()
-            if (
-                name not in local_index or
-                local_index[name][1] < remote_mtime
-            )
-        ]
+        # Determine actions using timestamps with tolerance to avoid oscillation
+        to_download = []
+        conflicts = []  # equal timestamp but different hash
+        for name, (remote_hash, remote_mtime) in remote_index.items():
+            if name not in local_index:
+                to_download.append(name)
+                continue
+            local_hash, local_mtime = local_index[name]
+            if (remote_mtime - local_mtime) > TIMESTAMP_TOLERANCE:
+                to_download.append(name)
+            elif abs(remote_mtime - local_mtime) <= TIMESTAMP_TOLERANCE and remote_hash != local_hash:
+                # Conflict: same time but different content -> prefer server by default
+                conflicts.append(name)
+                to_download.append(name)
 
         # Find orphaned files first (local files not on server)
         orphans = [
@@ -1174,18 +1092,19 @@ def do_sync(auto_upload=False, auto_delete=False):
             )
         ]
 
-        # Build upload list, EXCLUDING orphans (they'll be handled separately)
-        to_upload = [
-            m for m in local_meta
-            if (
-                not m["name"].lower().endswith('.json')
-                and m["name"] in remote_index  # Only files that exist on server
-                and (
-                    remote_index.get(m["name"], ("", 0))[0] != m["sha256"] or
-                    remote_index.get(m["name"], ("", 0))[1] < m["mtime"]
-                )
-            )
-        ]
+        # Build upload list only when local is newer by tolerance
+        to_upload = []
+        for m in local_meta:
+            name = m["name"]
+            if name.lower().endswith('.json'):
+                continue
+            if name in remote_index:
+                remote_hash, remote_mtime = remote_index[name]
+                local_hash, local_mtime = m["sha256"], m.get("mtime", 0.0)
+                if (local_mtime - remote_mtime) > TIMESTAMP_TOLERANCE:
+                    to_upload.append(m)
+                # If timestamps are equal within tolerance but hashes differ, we already chose download
+            # Orphans are handled separately below
         
         # Debug: Show detailed upload reasons
         if to_upload:
@@ -1193,25 +1112,15 @@ def do_sync(auto_upload=False, auto_delete=False):
             for m in to_upload:
                 name = m["name"]
                 local_hash = m["sha256"]
-                local_mtime = m["mtime"]
-
+                local_mtime = m.get("mtime", 0.0)
                 if name in remote_index:
                     remote_hash, remote_mtime = remote_index[name]
-                    hash_diff = local_hash != remote_hash
-                    time_diff = local_mtime > remote_mtime
-
                     print(ctext(f"  📄 {name}:", Fore.CYAN))
-                    reason_parts = []
-                    if hash_diff:
-                        reason_parts.append('Hash differs')
-                    if time_diff:
-                        reason_parts.append('Local newer')
-                    print(ctext(f"    Reason: {', '.join(reason_parts)}", Fore.CYAN))
+                    reason = "Local newer"
+                    print(ctext(f"    Reason: {reason}", Fore.CYAN))
                     print(ctext(f"    Local:  {local_hash[:12]}... @ {local_mtime}", Fore.CYAN))
                     print(ctext(f"    Remote: {remote_hash[:12]}... @ {remote_mtime}", Fore.CYAN))
                     print(ctext(f"    Time diff: {local_mtime - remote_mtime:.6f}s", Fore.CYAN))
-                else:
-                    print(ctext(f"  📄 {name}: New file (not on server)", Fore.CYAN))
 
         # Handle orphan files (local files not on server)
         if orphans:
@@ -1307,6 +1216,10 @@ def do_sync(auto_upload=False, auto_delete=False):
                             print(ctext(warn, Fore.YELLOW))
                     # For skip option, do nothing (orphan stays as-is)
 
+        # Ensure no file is both in download and upload lists
+        to_download_set = set(to_download)
+        to_upload = [m for m in to_upload if m["name"] not in to_download_set]
+
         # Debug: Show final upload list after processing orphans
         if to_upload:
             print(ctext(f"\n📋 Final upload queue: {len(to_upload)} files", Fore.CYAN))
@@ -1332,9 +1245,6 @@ def do_sync(auto_upload=False, auto_delete=False):
                             continue
                         f.write(chunk)
                         transferred += len(chunk)
-                        print_progress(name, transferred, total)
-                # Ensure final progress line ends and print a newline
-                sys.stdout.write("\n")
                 orig_mtime = remote_index[name][1]
                 os.utime(name, (orig_mtime, orig_mtime))
                 
@@ -1383,7 +1293,7 @@ def do_sync(auto_upload=False, auto_delete=False):
                     print(ctext(msg, Fore.GREEN))
                 
                 try:
-                    # Use Rich progress bar for upload
+                    # Perform upload without a progress bar
                     upload_url = f"{BASE_URL}/upload"
                     response = upload_with_rich(session, m["name"], upload_url,
                                                 config, m["mtime"])
@@ -1447,6 +1357,11 @@ def parse_arguments():
                         help='Auto-upload orphaned files (use with -c)')
     parser.add_argument('-d', '--delete', action='store_true',
                         help='Auto-delete orphaned files (use with -c)')
+    # Shorthand combined flags for convenience (e.g., `syncz -cu`)
+    parser.add_argument('-cu', '--sync-upload', dest='sync_upload', action='store_true',
+                        help='Shorthand for -c --upload (run sync and auto-upload orphans)')
+    parser.add_argument('-cd', '--sync-delete', dest='sync_delete', action='store_true',
+                        help='Shorthand for -c --delete (run sync and auto-delete orphans)')
     parser.add_argument('-p', '--preview', action='store_true',
                         help='Preview changes without performing sync')
     
@@ -1467,6 +1382,30 @@ def main():
     
     # Handle command-line interface
     if len(sys.argv) > 1:
+        # Handle combined shorthand flags first
+        if args.sync_upload or args.sync_delete:
+            # Validate conflicting flags
+            if args.sync_upload and args.sync_delete:
+                msg = ("❌ Error: Cannot use both -cu/--sync-upload and "
+                       "-cd/--sync-delete together")
+                print(ctext(msg, Fore.RED))
+                sys.exit(1)
+
+            if args.sync_upload:
+                print(ctext("🤖 SyncZ Auto-Upload Mode (-cu)", Fore.CYAN))
+                msg = "   All orphaned files will be automatically uploaded"
+                print(ctext(msg, Fore.CYAN))
+                do_sync(auto_upload=True, auto_delete=False)
+                return
+
+            if args.sync_delete:
+                print(ctext("🤖 SyncZ Auto-Delete Mode (-cd)", Fore.CYAN))
+                msg = ("   All orphaned files will be automatically moved "
+                       "to deleted folder")
+                print(ctext(msg, Fore.CYAN))
+                do_sync(auto_upload=False, auto_delete=True)
+                return
+
         if args.sync:
             # Validate conflicting flags
             if args.upload and args.delete:
