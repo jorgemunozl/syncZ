@@ -116,7 +116,7 @@ install_packages_i3() {
 
 setup_keybinding_gnome() {
     echo "▶ Setting up GNOME keybinding..."
-    local keybind='<Super><Shift>p'
+    local keybind='<Ctrl>a'
     local binding_path="/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/pdf-onebar/"
     
     local current_bindings
@@ -135,14 +135,14 @@ setup_keybinding_gnome() {
     gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:"$binding_path" name "$LAUNCHER_CMD_NAME"
     gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:"$binding_path" command "sh -c '$LAUNCHER_SCRIPT_PATH \"$PDF_DIR_DEFAULT\"'"
     gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:"$binding_path" binding "$keybind"
-    echo "✅ GNOME shortcut set: $keybind"
+    echo "✅ GNOME Ctrl+a shortcut set: $keybind"
 }
 
 setup_keybinding_i3() {
     echo "▶ Setting up i3 keybinding..."
     local i3_cfg_main="$HOME/.config/i3/config"
     local i3_cfg_fallback="$HOME/.i3/config"
-    local key_combo='bindsym Mod1+Shift+p exec --no-startup-id'
+    local key_combo='bindsym Ctrl+a exec --no-startup-id'
 
     local i3_config=""
     if [[ -f "$i3_cfg_main" ]]; then 
@@ -157,7 +157,7 @@ setup_keybinding_i3() {
         echo "   - $i3_cfg_fallback"
         echo ""
         echo "💡 Manual setup required. Add this line to your i3 config:"
-        echo "   bindsym Mod1+Shift+p exec --no-startup-id \"$LAUNCHER_SCRIPT_PATH\" \"$PDF_DIR_DEFAULT\""
+        echo "   bindsym Ctrl+a exec --no-startup-id \"$LAUNCHER_SCRIPT_PATH\" \"$PDF_DIR_DEFAULT\""
         echo ""
         echo "   Then reload i3: \$mod+Shift+r"
         return
@@ -223,4 +223,5 @@ echo "✅ Default PDF handler set."
 echo -e "\n🎉 \e[1;32mInstallation Complete!\e[0m"
 echo "Launcher script is at: $LAUNCHER_SCRIPT_PATH"
 echo "Default PDF folder: $PDF_DIR_DEFAULT"
+echo "Use 'pdf-onebar -x' or type '-x' in the launcher prompt to open with Okular (annotations) if okular is installed."
 echo "You can now use your new keyboard shortcut to find and open PDFs."

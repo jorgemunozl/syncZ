@@ -1,17 +1,53 @@
 #!/usr/bin/env python3
 """
 SyncZ Configuration Helper
-A simple script to help configure SyncZ for your network setup.
+Updates config.json interactively for server and client settings.
 """
 
+import json
 import socket
 import os
+from pathlib import Path
+
+try:
+    from .paths import CONFIG_FILE
+except ImportError:  # pragma: no cover - direct execution fallback
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
+    from syncz.paths import CONFIG_FILE
+
+DEFAULT_CONFIG = {
+    "path": "/root/shared/zoteroReference",
+    "server_ip": "192.168.43.119",
+    "server_port": 8000,
+}
+
+
+def normalize_config(config):
+    if "server_port" not in config and "port" in config:
+        config["server_port"] = config["port"]
+    if "port" not in config and "server_port" in config:
+        config["port"] = config["server_port"]
+    return config
+
+
+def load_config():
+    if CONFIG_FILE.exists():
+        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+            return normalize_config(json.load(f))
+    return DEFAULT_CONFIG.copy()
+
+
+def save_config(config):
+    config = normalize_config(config)
+    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+        json.dump(config, f, indent=2)
+    print(f"✅ Saved configuration to {CONFIG_FILE}")
 
 
 def get_local_ip():
     """Get the local IP address of this machine."""
     try:
-        # Connect to a remote address to determine local IP (LAN)
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
             s.connect(("8.8.8.8", 80))
             local_ip = s.getsockname()[0]
@@ -36,66 +72,11 @@ def get_ethernet_ip():
         return get_local_ip()
 
 
-def update_client_config(server_ip, sync_path):
-    """Update client.py with new configuration."""
-    try:
-        with open("client.py", "r") as f:
-            content = f.read()
-
-        # Update SERVER_IP
-        content = content.replace(
-            'SERVER_IP   = "192.168.43.119"',
-            f'SERVER_IP   = "{server_ip}"'
-        )
-
-        # Update path
-        content = content.replace(
-            'path="/root/shared/zoteroReference"',
-            f'path="{sync_path}"'
-        )
-
-        with open("client.py", "w") as f:
-            f.write(content)
-
-        print(f"✅ Updated client.py with SERVER_IP: {server_ip} and path: {sync_path}")
-        return True
-    except Exception as e:
-        print(f"❌ Error updating client.py: {e}")
-        return False
-
-
-def update_server_config(sync_path, port=8000):
-    """Update run_server.py with new configuration."""
-    try:
-        with open("run_server.py", "r") as f:
-            content = f.read()
-
-        # Update path
-        content = content.replace(
-            'path = "/home/jorge/zoteroReference"',
-            f'path = "{sync_path}"'
-        )
-
-        # Update PORT if different
-        if port != 8000:
-            content = content.replace(
-                'PORT = 8000',
-                f'PORT = {port}'
-            )
-
-        with open("run_server.py", "w") as f:
-            f.write(content)
-
-        print(f"✅ Updated run_server.py with path: {sync_path} and port: {port}")
-        return True
-    except Exception as e:
-        print(f"❌ Error updating run_server.py: {e}")
-        return False
-
-
 def main():
     print("🔧 SyncZ Configuration Helper")
     print("=" * 40)
+
+    config = load_config()
 
     print("\n🌐 Network Type Selection:")
     print("1. LAN (WiFi/Local Network)")
@@ -126,25 +107,23 @@ def main():
         if use_relative:
             rel = input(f"{prompt} (relative to this script, press Enter for '.'): ").strip()
             return rel if rel else "."
-        else:
-            abs_path = input(f"{prompt} (absolute, press Enter for current directory): ").strip()
-            return abs_path if abs_path else os.getcwd()
+        abs_path = input(f"{prompt} (absolute, press Enter for current directory): ").strip()
+        return abs_path if abs_path else os.getcwd()
 
     if choice in ["1", "3"]:
         print("\n🖥️  Server Configuration")
         server_path = get_path("Enter sync directory path for server")
-        port = input("Enter server port (press Enter for 8000): ").strip()
-        if not port:
+        port_input = input("Enter server port (press Enter for 8000): ").strip()
+        try:
+            port = int(port_input) if port_input else 8000
+        except ValueError:
+            print("Invalid port, using 8000")
             port = 8000
-        else:
-            try:
-                port = int(port)
-            except ValueError:
-                print("Invalid port, using 8000")
-                port = 8000
-        if update_server_config(server_path, port):
-            print("\n🚀 Server ready! Run: python run_server.py")
-            print(f"📡 Server will be available at: http://{local_ip}:{port}")
+        config["path"] = server_path
+        config["server_port"] = port
+        config["port"] = port
+        print("\n🚀 Server ready! Run: ./syncz --server")
+        print(f"📡 Server will be available at: http://{local_ip}:{port}")
 
     if choice in ["2", "3"]:
         print("\n💻 Client Configuration")
@@ -158,13 +137,16 @@ def main():
                 print("❌ Server IP is required for client configuration")
                 return
         client_path = get_path("Enter local sync directory path for client")
-        if update_client_config(server_ip, client_path):
-            print("\n🔄 Client ready! Run: python client.py")
+        config["server_ip"] = server_ip
+        config["path"] = client_path
+        print("\n🔄 Client ready! Run: ./syncz")
+
+    save_config(config)
 
     print("\n✨ Configuration complete!")
     print("\n📝 Quick Start:")
-    print("1. On server device: python run_server.py")
-    print("2. On client device: python client.py")
+    print("1. On server device: ./syncz --server")
+    print("2. On client device: ./syncz")
 
 
 if __name__ == "__main__":

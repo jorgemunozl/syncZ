@@ -4,6 +4,7 @@ import hashlib
 import requests
 import sys
 import time
+from pathlib import Path
 import shutil
 import argparse
 from datetime import datetime, timedelta
@@ -12,6 +13,12 @@ import unicodedata
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from requests_toolbelt.multipart.encoder import MultipartEncoder
+
+try:
+    from .paths import CONFIG_FILE
+except ImportError:  # pragma: no cover - direct execution fallback
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
+    from syncz.paths import CONFIG_FILE
 try:
     from wcwidth import wcwidth as _wcwidth, wcswidth as _wcswidth
 except Exception:
@@ -200,8 +207,6 @@ def generate_file_list(root_dir):
 
 
 # --- Configuration ---
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-CONFIG_FILE = os.path.join(SCRIPT_DIR, "config.json")
 DEFAULT_PATH = "/root/shared/zoteroReference"
 DEFAULT_SERVER_IP = "192.168.43.119"
 DEFAULT_SERVER_PORT = 8000
@@ -213,12 +218,18 @@ TIMESTAMP_TOLERANCE = 1.0  # seconds
 def load_config():
     if os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
+            config = json.load(f)
+        if "server_port" not in config and "port" in config:
+            config["server_port"] = config["port"]
+        if "port" not in config and "server_port" in config:
+            config["port"] = config["server_port"]
+        return config
     # Default config if not present
     return {
         "path": DEFAULT_PATH,
         "server_ip": DEFAULT_SERVER_IP,
-        "server_port": DEFAULT_SERVER_PORT
+        "server_port": DEFAULT_SERVER_PORT,
+        "port": DEFAULT_SERVER_PORT,
     }
 
 
@@ -818,6 +829,7 @@ def change_config():
                     port_num = int(new_port)
                     if 1 <= port_num <= 65535:
                         config["server_port"] = port_num
+                        config["port"] = port_num
                         print(ctext("✅ Server port updated successfully!",
                                     Fore.GREEN))
                     else:
@@ -834,6 +846,7 @@ def change_config():
             config["path"] = termux_path
             config["server_ip"] = "192.168.43.119"  # Common mobile hotspot IP
             config["server_port"] = 8000
+            config["port"] = 8000
             print(ctext("✅ Termux preset applied:", Fore.GREEN))
             print(ctext(f"  📁 Path: {termux_path}", Fore.WHITE))
             print(ctext("  🌐 IP: 192.168.43.119", Fore.WHITE))
@@ -842,6 +855,7 @@ def change_config():
         elif choice == "5":
             # Save configuration
             try:
+                config["port"] = config.get("server_port", DEFAULT_SERVER_PORT)
                 with open(CONFIG_FILE, "w", encoding="utf-8") as f:
                     json.dump(config, f, indent=2)
                 print(ctext("\n💾 Configuration saved successfully!",
@@ -861,15 +875,15 @@ def change_config():
 
 
 def start_server():
-    import subprocess
     print(ctext("\n🖥️  Starting SyncZ Server...", Fore.GREEN))
     try:
-        subprocess.run(["python3", "run_server.py"], check=True)
-    except subprocess.CalledProcessError:
-        print(ctext("❌ Failed to start server. Make sure run_server.py exists.",
-                    Fore.RED))
+        from . import run_server
+        run_server.main()
     except KeyboardInterrupt:
         print(ctext("\n🛑 Server stopped by user.", Fore.YELLOW))
+    except Exception as exc:
+        msg = "❌ Failed to start server. Make sure SyncZ is installed correctly."
+        print(ctext(f"{msg}\n   {exc}", Fore.RED))
 
 
 def do_sync(auto_upload=False, auto_delete=False):

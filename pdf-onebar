@@ -1,15 +1,49 @@
 #!/usr/bin/env bash
 # Unified dmenu launcher for PDFs; supports page jump via ':12', '#12', or '-P 12'.
-# Usage: pdf-onebar [DIR]
+# Usage: pdf-onebar [-x] [DIR]
+#   -x / --okular   open with okular (annotation-friendly) instead of zathura
 # Env:
 #   PDF_DIR_DEFAULT  Default directory if no DIR arg provided (falls back to $HOME/zoteroReference/)
 #   DMENU            dmenu binary (default: dmenu)
 #   DMENU_ARGS       extra args for dmenu (flags only; prompt supplied here)
+#   OKULAR_CMD       override okular binary (default: okular)
+#   ZATHURA_CMD      override zathura binary (default: zathura)
 set -euo pipefail
 
-DIR="${1:-${PDF_DIR_DEFAULT:-$HOME/zoteroReference/}}"
+USE_OKULAR=0
+DIR=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -x|--okular)
+      USE_OKULAR=1
+      ;;
+    -h|--help)
+      cat <<'EOF'
+Usage: pdf-onebar [-x] [DIR]
+  -x, --okular   open with okular (annotation-friendly) instead of zathura
+
+Environment:
+  PDF_DIR_DEFAULT  default directory if DIR is not provided
+  DMENU            dmenu binary (default: dmenu)
+  DMENU_ARGS       extra args for dmenu (flags only; prompt supplied here)
+  OKULAR_CMD       override okular binary (default: okular)
+  ZATHURA_CMD      override zathura binary (default: zathura)
+EOF
+      exit 0
+      ;;
+    *)
+      DIR="$1"
+      ;;
+  esac
+  shift
+done
+
+DIR="${DIR:-${PDF_DIR_DEFAULT:-$HOME/zoteroReference/}}"
 DMENU=${DMENU:-dmenu}
 DMENU_ARGS=${DMENU_ARGS:-"-i"}  # pass flags only; we'll supply the prompt
+OKULAR_CMD=${OKULAR_CMD:-okular}
+ZATHURA_CMD=${ZATHURA_CMD:-zathura}
 
 # Collect PDF list (prefer fd/fdfind; fallback to find). Output relative paths.
 if command -v fd >/dev/null 2>&1; then
@@ -47,12 +81,23 @@ if [[ ${#lines[@]} -eq 0 ]]; then
 fi
 
 # Present menu of display names only (dmenu prints selection or typed input)
-PROMPT='pdf (append :12 or -P 12):'
+PROMPT='pdf (append :12/-P 12, add -x for okular):'
 read -r -a _DMENU_ARGS <<< "$DMENU_ARGS"
 choice=$(printf '%s\n' "${lines[@]}" | cut -f1 | "$DMENU" "${_DMENU_ARGS[@]}" -p "$PROMPT") || exit 0
 [[ -n "$choice" ]] || exit 0
 
 line="$choice"
+
+# Allow typing -x/--okular inline in the prompt (prefix or suffix)
+if [[ "$line" =~ ^[[:space:]]*(-x|--okular)[[:space:]]+(.*)$ ]]; then
+  USE_OKULAR=1
+  line="${BASH_REMATCH[2]}"
+fi
+if [[ "$line" =~ (.*)[[:space:]](-x|--okular)[[:space:]]*$ ]]; then
+  USE_OKULAR=1
+  line="${BASH_REMATCH[1]}"
+fi
+
 file_display="$line"; page=""
 # If the user appended a page suffix (when using Tab to paste), strip & parse it
 if [[ "$line" =~ (.*)[[:space:]]-P[[:space:]]*([0-9-]+)$ ]]; then
@@ -67,9 +112,25 @@ file_display="${file_display%"${file_display##*[![:space:]]}"}"
 abs_path=$(printf '%s\n' "${lines[@]}" | awk -v sel="$file_display" -F '\t' '($1==sel){print $2; exit}') || true
 [[ -n "$abs_path" ]] || exit 1
 
-# Launch zathura (jump to page if provided)
-if [[ -n "$page" ]]; then
-  exec zathura -P "$page" "$abs_path"
+# Choose viewer and launch (jump to page if provided)
+if (( USE_OKULAR )); then
+  if ! command -v "$OKULAR_CMD" >/dev/null 2>&1; then
+    echo "❌ okular not found. Install it or set OKULAR_CMD to your okular binary." >&2
+    exit 1
+  fi
+  if [[ -n "$page" ]]; then
+    exec "$OKULAR_CMD" --page "$page" "$abs_path"
+  else
+    exec "$OKULAR_CMD" "$abs_path"
+  fi
 else
-  exec zathura "$abs_path"
+  if ! command -v "$ZATHURA_CMD" >/dev/null 2>&1; then
+    echo "❌ zathura not found. Install it or set ZATHURA_CMD to your viewer binary." >&2
+    exit 1
+  fi
+  if [[ -n "$page" ]]; then
+    exec "$ZATHURA_CMD" -P "$page" "$abs_path"
+  else
+    exec "$ZATHURA_CMD" "$abs_path"
+  fi
 fi

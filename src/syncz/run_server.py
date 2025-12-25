@@ -4,6 +4,14 @@ import os
 import json
 import socketserver
 from datetime import datetime
+from pathlib import Path
+
+try:
+    from .paths import CONFIG_FILE
+except ImportError:  # pragma: no cover - direct execution fallback
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
+    from syncz.paths import CONFIG_FILE
 
 # Try to import colorama for colored output
 try:
@@ -55,19 +63,27 @@ def format_file_size(size_bytes):
 
 
 # --- Configuration ---
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-CONFIG_FILE = os.path.join(SCRIPT_DIR, "config.json")
 DEFAULT_PATH = "/home/jorge/zoteroReference"
 DEFAULT_PORT = 8000
+METADATA_PATH = 'file_list.json'
+# These are set in main() so handlers can read the latest values
+path = DEFAULT_PATH
+PORT = DEFAULT_PORT
 
 
 def load_config():
     if os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
+            config = json.load(f)
+        if "port" not in config and "server_port" in config:
+            config["port"] = config["server_port"]
+        if "server_port" not in config and "port" in config:
+            config["server_port"] = config["port"]
+        return config
     return {
         "path": DEFAULT_PATH,
-        "port": DEFAULT_PORT
+        "port": DEFAULT_PORT,
+        "server_port": DEFAULT_PORT,
     }
 
 
@@ -89,9 +105,10 @@ def get_primary_ip():
             return "127.0.0.1"
 
 
-def show_server_config():
+def show_server_config(config=None):
     """Display current server configuration with beautiful formatting"""
-    config = load_config()
+    if config is None:
+        config = load_config()
     print(ctext("\n" + "=" * 50, Fore.CYAN))
     print(ctext("           SYNCZ SERVER CONFIGURATION", Fore.GREEN))
     print(ctext("=" * 50, Fore.CYAN))
@@ -101,12 +118,6 @@ def show_server_config():
     print(ctext("🔌 Server Port: ", Fore.YELLOW) + ctext(f"{config.get('port', DEFAULT_PORT)}", Fore.WHITE))
     print(ctext("🌐 Server IP: ", Fore.YELLOW) + ctext("0.0.0.0 (all interfaces)", Fore.WHITE))
     print(ctext("=" * 50, Fore.CYAN))
-
-
-config = load_config()
-path = config.get("path", DEFAULT_PATH)
-PORT = config.get("port", DEFAULT_PORT)
-METADATA_PATH = 'file_list.json'
 
 
 def parse_multipart_form_data(boundary, body):
@@ -458,8 +469,13 @@ def generate_file_list(root_dir):
 
 
 def main():
+    global path, PORT
+    config = load_config()
+    path = config.get("path", DEFAULT_PATH)
+    PORT = config.get("port", DEFAULT_PORT)
+
     print(ctext("\n🚀 Starting SyncZ Server (Simple Version)...", Fore.GREEN))
-    show_server_config()
+    show_server_config(config)
     
     try:
         os.chdir(path)

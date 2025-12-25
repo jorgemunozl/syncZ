@@ -1,74 +1,72 @@
 #!/usr/bin/env python3
-"""
-SyncZ CLI Wrapper
-Provides the syncz command-line interface for easy access to SyncZ functionality.
-"""
-import sys
+"""SyncZ CLI wrapper for launching the main client from a src layout."""
 import os
+import sys
+import subprocess
+from pathlib import Path
 
-# Get the directory where this script is located
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-CLIENT_PATH = os.path.join(SCRIPT_DIR, "client.py")
-VENV_PYTHON = os.path.join(SCRIPT_DIR, ".venv", "bin", "python")
+SCRIPT_DIR = Path(__file__).resolve().parent
+SRC_DIR = SCRIPT_DIR / "src"
+CLIENT_PATH = SRC_DIR / "syncz" / "client.py"
+VENV_PYTHON = SCRIPT_DIR / ".venv" / "bin" / "python"
+MODULE_ENTRYPOINT = "syncz.client"
 
 
 def get_python_command():
-    """Get the appropriate Python command to use"""
-    # Try to use virtual environment Python first
-    if os.path.exists(VENV_PYTHON):
-        return VENV_PYTHON
-    
-    # Fallback to system Python
-    import subprocess
-    
-    # Try python3 first (most common)
-    try:
-        subprocess.run(["python3", "--version"], check=True, capture_output=True)
-        return "python3"
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        pass
-    
-    # Try python command
-    try:
-        subprocess.run(["python", "--version"], check=True, capture_output=True)
-        return "python"
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        pass
-    
-    # Last resort: try full path on Termux
-    termux_python = "/data/data/com.termux/files/usr/bin/python"
-    if os.path.exists(termux_python):
-        return termux_python
-    
+    """Get the appropriate Python command to use."""
+    if VENV_PYTHON.exists():
+        return str(VENV_PYTHON)
+
+    for candidate in ("python3", "python"):
+        try:
+            subprocess.run(
+                [candidate, "--version"], check=True, capture_output=True
+            )
+            return candidate
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            continue
+
+    termux_python = Path("/data/data/com.termux/files/usr/bin/python")
+    if termux_python.exists():
+        return str(termux_python)
+
     print("❌ Error: Python not found. Please install Python 3.")
     print(f"   Tried virtual env: {VENV_PYTHON}")
     print("   Tried: python3, python")
     sys.exit(1)
 
 
+def build_env():
+    """Return environment with src on PYTHONPATH so imports work."""
+    env = os.environ.copy()
+    src_path = str(SRC_DIR)
+    existing = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = (
+        src_path if not existing else f"{src_path}{os.pathsep}{existing}"
+    )
+    return env
+
+
 def main():
-    """Main entry point for syncz command"""
-    if not os.path.exists(CLIENT_PATH):
+    """Main entry point for syncz command."""
+    if not CLIENT_PATH.exists():
         print(f"❌ Error: client.py not found at {CLIENT_PATH}")
-        print("📁 Contents of script directory:")
+        print("📁 Contents of src directory:")
         try:
-            for item in os.listdir(SCRIPT_DIR):
-                print(f"   - {item}")
-        except Exception as e:
-            print(f"   Error listing directory: {e}")
+            for item in sorted(SRC_DIR.iterdir()):
+                print(f"   - {item.name}")
+        except Exception as e:  # pragma: no cover - defensive logging
+            print(f"   Error listing src directory: {e}")
         sys.exit(1)
-    
-    # Get Python command
+
     python_cmd = get_python_command()
-    
-    # Build command to execute - use os.execv for direct execution
-    args = [python_cmd, CLIENT_PATH] + sys.argv[1:]
-    
+    args = [python_cmd, "-m", MODULE_ENTRYPOINT] + sys.argv[1:]
+    env = build_env()
+
     try:
-        # Change to script directory and execute
         os.chdir(SCRIPT_DIR)
-        os.execv(python_cmd, args)
-    except Exception as e:
+        os.execvpe(python_cmd, args, env)
+    except Exception as e:  # pragma: no cover - exec failure path
         print(f"❌ Error executing syncz: {e}")
         sys.exit(1)
 

@@ -61,8 +61,10 @@ The installer will:
 
 1. **Keyboard Shortcut**: Press `Super+Shift+P` (GNOME) or `$mod+Shift+P` (i3)
 2. **Search Interface**: Type to filter PDFs by name or path
-3. **Open PDF**: Press Enter to open with Zathura
+3. **Open PDF**: Press Enter to open with Zathura. To use Okular for annotations, either run `pdf-onebar -x` or type `-x` in the launcher prompt before/after the filename.
 4. **Page Jumping**: Append `:12`, `#12`, or `-P 12` to jump to specific pages
+
+> Tip: In the launcher prompt you can type `-x` to open with Okular (requires Okular installed). Append `:12`/`-P 12` to jump straight to a page.
 
 ### 📋 Example
 
