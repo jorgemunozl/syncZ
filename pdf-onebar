@@ -128,9 +128,10 @@ else
     echo "❌ zathura not found. Install it or set ZATHURA_CMD to your viewer binary." >&2
     exit 1
   fi
+  cmd=("$ZATHURA_CMD" --mode fullscreen)
   if [[ -n "$page" ]]; then
-    exec "$ZATHURA_CMD" -P "$page" "$abs_path"
-  else
-    exec "$ZATHURA_CMD" "$abs_path"
+    cmd+=(-P "$page")
   fi
+  cmd+=("$abs_path")
+  exec "${cmd[@]}"
 fi
