@@ -91,8 +91,7 @@ if [[ ${#lines[@]} -eq 0 ]]; then
 fi
 
 # Present menu of display names only (dmenu prints selection or typed input)
-PROMPT='pdf (append :12/-P 12, add -x for okular):'
-PROMPT='pdf (append :12/-P 12, add -x for okular or -a for zathura page 2, -f to flatten):'
+PROMPT='pdf (append : /-P 12, -x, -f ):'
 read -r -a _DMENU_ARGS <<< "$DMENU_ARGS"
 choice=$(printf '%s\n' "${lines[@]}" | cut -f1 | "$DMENU" "${_DMENU_ARGS[@]}" -p "$PROMPT") || exit 0
 [[ -n "$choice" ]] || exit 0
