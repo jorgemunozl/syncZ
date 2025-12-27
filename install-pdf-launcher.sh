@@ -71,12 +71,30 @@ install_packages_gnome() {
         else
             echo "   Keeping zathura-pdf-mupdf. Skipping poppler installation."
             sudo apt install -y dmenu fd-find zathura xdg-utils
+            # Ensure optional viewers/tools available even if poppler backend skipped
+            if ! command -v okular >/dev/null 2>&1; then
+                echo "▶ Installing Okular (optional viewer)..."
+                sudo apt install -y okular || echo "⚠️ Failed to install Okular"
+            fi
+            if ! command -v gs >/dev/null 2>&1; then
+                echo "▶ Installing Ghostscript (gs)..."
+                sudo apt install -y ghostscript || echo "⚠️ Failed to install Ghostscript"
+            fi
             echo "   NOTE: PDF functionality may be limited with mupdf backend."
             return
         fi
     fi
     
     sudo apt install -y dmenu fd-find zathura zathura-pdf-poppler xdg-utils
+    # Ensure Okular and Ghostscript are available for advanced operations
+    if ! command -v okular >/dev/null 2>&1; then
+        echo "▶ Installing Okular (optional viewer)..."
+        sudo apt install -y okular || echo "⚠️ Failed to install Okular"
+    fi
+    if ! command -v gs >/dev/null 2>&1; then
+        echo "▶ Installing Ghostscript (gs)..."
+        sudo apt install -y ghostscript || echo "⚠️ Failed to install Ghostscript"
+    fi
     # fd-find installs the binary as 'fdfind'; create a convenient 'fd' shim if missing
     if ! command -v fd >/dev/null 2>&1 && command -v fdfind >/dev/null 2>&1; then
         mkdir -p "$HOME/.local/bin"
@@ -106,12 +124,30 @@ install_packages_i3() {
         else
             echo "   Keeping zathura-pdf-mupdf. Skipping poppler installation."
             sudo pacman -S --needed --noconfirm dmenu fd zathura xdg-utils
+            # Ensure optional viewers/tools available even if poppler backend skipped
+            if ! command -v okular >/dev/null 2>&1; then
+                echo "▶ Installing Okular (optional viewer)..."
+                sudo pacman -S --needed --noconfirm okular || echo "⚠️ Failed to install Okular"
+            fi
+            if ! command -v gs >/dev/null 2>&1; then
+                echo "▶ Installing Ghostscript (gs)..."
+                sudo pacman -S --needed --noconfirm ghostscript || echo "⚠️ Failed to install Ghostscript"
+            fi
             echo "   NOTE: PDF functionality may be limited with mupdf backend."
             return
         fi
     fi
     
     sudo pacman -S --needed --noconfirm dmenu fd zathura zathura-pdf-poppler xdg-utils
+    # Ensure Okular and Ghostscript are available for advanced operations
+    if ! command -v okular >/dev/null 2>&1; then
+        echo "▶ Installing Okular (optional viewer)..."
+        sudo pacman -S --needed --noconfirm okular || echo "⚠️ Failed to install Okular"
+    fi
+    if ! command -v gs >/dev/null 2>&1; then
+        echo "▶ Installing Ghostscript (gs)..."
+        sudo pacman -S --needed --noconfirm ghostscript || echo "⚠️ Failed to install Ghostscript"
+    fi
 }
 
 setup_keybinding_gnome() {
